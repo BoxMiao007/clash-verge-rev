@@ -416,16 +416,16 @@
         "autoDelayDetectionInterval": "Intervalo de detección automática de latencia",
         "defaultLatencyTest": "Enlace de prueba de latencia predeterminado",
         "defaultLatencyTimeout": "Tiempo de espera de la prueba de latencia",
-        "defaultSpeedtestUrl": "Speed Test URL",
-        "defaultSpeedtestDuration": "Speed Test Duration"
+        "defaultSpeedtestUrl": "URL de prueba de velocidad",
+        "defaultSpeedtestDuration": "Duración de la prueba de velocidad"
       },
       "tooltips": {
         "autoCloseConnections": "Cierra las conexiones establecidas cuando se cambia el nodo seleccionado en el grupo de proxy o el modo de proxy.",
         "enableBuiltinEnhanced": "Procesamiento de compatibilidad de archivos de configuración",
         "autoDelayDetection": "Prueba periódicamente la latencia del nodo actual en segundo plano",
         "defaultLatencyTest": "Solo se utiliza para pruebas de solicitudes de clientes HTTP y no afectará al archivo de configuración.",
-        "defaultSpeedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
-        "defaultSpeedtestDuration": "Download window of each speed test, between 1 and 30 seconds"
+        "defaultSpeedtestUrl": "URL del archivo de prueba que se descarga durante las pruebas de velocidad; déjelo vacío para usar el valor predeterminado integrado",
+        "defaultSpeedtestDuration": "Ventana de descarga de cada prueba de velocidad, entre 1 y 30 segundos"
       },
       "options": {
         "proxyLayoutColumns": {

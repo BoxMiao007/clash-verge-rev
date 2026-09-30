@@ -416,16 +416,16 @@
         "autoDelayDetectionInterval": "Interval Deteksi Latensi Otomatis",
         "defaultLatencyTest": "Tes Latensi Default",
         "defaultLatencyTimeout": "Waktu Habis Latensi Default",
-        "defaultSpeedtestUrl": "Speed Test URL",
-        "defaultSpeedtestDuration": "Speed Test Duration"
+        "defaultSpeedtestUrl": "URL Uji Kecepatan",
+        "defaultSpeedtestDuration": "Durasi Uji Kecepatan"
       },
       "tooltips": {
         "autoCloseConnections": "Hentikan koneksi yang sudah ada saat pemilihan grup proksi atau mode proksi berubah",
         "enableBuiltinEnhanced": "Penanganan kompatibilitas untuk file konfigurasi",
         "autoDelayDetection": "Secara berkala menguji latensi node saat ini di latar belakang",
         "defaultLatencyTest": "Digunakan hanya untuk pengujian permintaan klien HTTP dan tidak akan mempengaruhi file konfigurasi",
-        "defaultSpeedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
-        "defaultSpeedtestDuration": "Download window of each speed test, between 1 and 30 seconds"
+        "defaultSpeedtestUrl": "URL file uji yang diunduh saat uji kecepatan; biarkan kosong untuk menggunakan nilai bawaan",
+        "defaultSpeedtestDuration": "Durasi unduhan setiap uji kecepatan, antara 1 dan 30 detik"
       },
       "options": {
         "proxyLayoutColumns": {

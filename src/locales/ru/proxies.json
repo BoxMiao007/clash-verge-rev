@@ -31,11 +31,11 @@
     "tooltips": {
       "locate": "Местоположение",
       "delayCheck": "Проверка задержки",
-      "speedCheck": "Speed test",
+      "speedCheck": "Проверка скорости",
       "sortDefault": "Сортировать по умолчанию",
       "sortDelay": "Сортировать по задержке",
       "sortName": "Сортировать по названию",
-      "sortSpeed": "Sort by download speed",
+      "sortSpeed": "Сортировать по скорости загрузки",
       "delayCheckUrl": "URL для проверки задержки",
       "showBasic": "Показывать меньше информации о прокси",
       "showDetail": "Показывать больше информации о прокси",

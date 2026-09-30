@@ -416,16 +416,16 @@
         "autoDelayDetectionInterval": "자동 지연 감지 간격",
         "defaultLatencyTest": "기본 지연 테스트",
         "defaultLatencyTimeout": "기본 지연 제한시간",
-        "defaultSpeedtestUrl": "Speed Test URL",
-        "defaultSpeedtestDuration": "Speed Test Duration"
+        "defaultSpeedtestUrl": "기본 속도 테스트 URL",
+        "defaultSpeedtestDuration": "기본 속도 테스트 시간"
       },
       "tooltips": {
         "autoCloseConnections": "프록시 그룹 선택 또는 프록시 모드 변경 시 기존 연결을 종료합니다",
         "enableBuiltinEnhanced": "구성 파일에 대한 호환성 처리를 수행합니다",
         "autoDelayDetection": "백그라운드에서 현재 노드의 지연을 주기적으로 검사합니다",
         "defaultLatencyTest": "HTTP 클라이언트 요청 테스트에만 사용되며 구성 파일에는 영향을 주지 않습니다",
-        "defaultSpeedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
-        "defaultSpeedtestDuration": "Download window of each speed test, between 1 and 30 seconds"
+        "defaultSpeedtestUrl": "속도 테스트에서 다운로드하는 테스트 파일의 URL입니다. 비워 두면 내장 기본값이 사용됩니다",
+        "defaultSpeedtestDuration": "속도 테스트 1회당 다운로드 시간으로, 1~30초입니다"
       },
       "options": {
         "proxyLayoutColumns": {

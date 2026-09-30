@@ -31,11 +31,11 @@
     "tooltips": {
       "locate": "Lokasi",
       "delayCheck": "Periksa Keterlambatan",
-      "speedCheck": "Speed test",
+      "speedCheck": "Uji Kecepatan",
       "sortDefault": "Urutkan secara default",
       "sortDelay": "Urutkan berdasarkan keterlambatan",
       "sortName": "Urutkan berdasarkan nama",
-      "sortSpeed": "Sort by download speed",
+      "sortSpeed": "Urutkan berdasarkan kecepatan unduhan",
       "delayCheckUrl": "URL Periksa Keterlambatan",
       "showBasic": "Dasar Proksi",
       "showDetail": "Detail Proksi",

@@ -31,11 +31,11 @@
     "tooltips": {
       "locate": "目前節點",
       "delayCheck": "延遲測試",
-      "speedCheck": "Speed test",
+      "speedCheck": "速度測試",
       "sortDefault": "預設排序",
       "sortDelay": "按延遲排序",
       "sortName": "按名稱排序",
-      "sortSpeed": "Sort by download speed",
+      "sortSpeed": "按下載速度排序",
       "delayCheckUrl": "延遲測試網址",
       "showBasic": "隱藏節點細節",
       "showDetail": "展示節點細節",

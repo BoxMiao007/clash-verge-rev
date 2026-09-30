@@ -416,16 +416,16 @@
         "autoDelayDetectionInterval": "自動遅延検出間隔",
         "defaultLatencyTest": "デフォルトの遅延テストURL",
         "defaultLatencyTimeout": "テストタイムアウト時間",
-        "defaultSpeedtestUrl": "Speed Test URL",
-        "defaultSpeedtestDuration": "Speed Test Duration"
+        "defaultSpeedtestUrl": "速度テストURL",
+        "defaultSpeedtestDuration": "速度テスト時間"
       },
       "tooltips": {
         "autoCloseConnections": "プロキシグループで選択されたノードまたはプロキシモードが変更されたときに、既存の接続を閉じます。",
         "enableBuiltinEnhanced": "設定ファイルの互換性処理",
         "autoDelayDetection": "バックグラウンドで現在のノードのレイテンシーを定期的にテストします",
         "defaultLatencyTest": "HTTPクライアントリクエストテストにのみ使用され、設定ファイルには影響しません。",
-        "defaultSpeedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
-        "defaultSpeedtestDuration": "Download window of each speed test, between 1 and 30 seconds"
+        "defaultSpeedtestUrl": "速度テストでダウンロードするテストファイルのURL。空欄の場合は内蔵のデフォルト値が使用されます",
+        "defaultSpeedtestDuration": "1回の速度テストのダウンロード時間(1〜30秒)"
       },
       "options": {
         "proxyLayoutColumns": {

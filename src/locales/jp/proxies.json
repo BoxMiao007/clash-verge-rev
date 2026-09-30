@@ -31,11 +31,11 @@
     "tooltips": {
       "locate": "現在のノード",
       "delayCheck": "遅延テスト",
-      "speedCheck": "Speed test",
+      "speedCheck": "速度テスト",
       "sortDefault": "デフォルトでソート",
       "sortDelay": "遅延でソート",
       "sortName": "名前でソート",
-      "sortSpeed": "Sort by download speed",
+      "sortSpeed": "ダウンロード速度でソート",
       "delayCheckUrl": "遅延テストURL",
       "showBasic": "ノードの詳細を隠す",
       "showDetail": "ノードの詳細を表示する",

@@ -31,11 +31,11 @@
     "tooltips": {
       "locate": "الموقع",
       "delayCheck": "فحص التأخير",
-      "speedCheck": "Speed test",
+      "speedCheck": "اختبار السرعة",
       "sortDefault": "الترتيب الافتراضي",
       "sortDelay": "الترتيب حسب التأخير",
       "sortName": "الترتيب حسب الاسم",
-      "sortSpeed": "Sort by download speed",
+      "sortSpeed": "الترتيب حسب سرعة التنزيل",
       "delayCheckUrl": "رابط فحص التأخير",
       "showBasic": "إعدادات الوكيل الأساسية",
       "showDetail": "تفاصيل الوكيل",

@@ -31,11 +31,11 @@
     "tooltips": {
       "locate": "위치 찾기",
       "delayCheck": "지연 확인",
-      "speedCheck": "Speed test",
+      "speedCheck": "속도 테스트",
       "sortDefault": "기본 정렬",
       "sortDelay": "지연으로 정렬",
       "sortName": "이름으로 정렬",
-      "sortSpeed": "Sort by download speed",
+      "sortSpeed": "다운로드 속도로 정렬",
       "delayCheckUrl": "지연 확인 URL",
       "showBasic": "프록시 기본",
       "showDetail": "프록시 상세",
