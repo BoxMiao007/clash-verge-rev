@@ -415,13 +415,17 @@
         "autoDelayDetection": "Автоматическое измерение задержки",
         "autoDelayDetectionInterval": "Интервал автоматического измерения задержки",
         "defaultLatencyTest": "URL для теста задержки",
-        "defaultLatencyTimeout": "Таймаут задержки по умолчанию"
+        "defaultLatencyTimeout": "Таймаут задержки по умолчанию",
+        "defaultSpeedtestUrl": "Speed Test URL",
+        "defaultSpeedtestDuration": "Speed Test Duration"
       },
       "tooltips": {
         "autoCloseConnections": "Закрывать установленные соединения при изменении выбора группы прокси или режима прокси",
         "enableBuiltinEnhanced": "Обработка совместимости для файла конфигурации",
         "autoDelayDetection": "Периодически проверяет задержку текущего узла в фоновом режиме",
-        "defaultLatencyTest": "Используется только для тестирования HTTP-запросов клиента и не влияет на файл конфигурации"
+        "defaultLatencyTest": "Используется только для тестирования HTTP-запросов клиента и не влияет на файл конфигурации",
+        "defaultSpeedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
+        "defaultSpeedtestDuration": "Download window of each speed test, between 1 and 30 seconds"
       },
       "options": {
         "proxyLayoutColumns": {

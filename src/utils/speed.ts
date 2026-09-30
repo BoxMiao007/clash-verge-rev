@@ -77,7 +77,34 @@ export const compareBySpeed = (a: number, b: number): number => {
   return b - a
 }
 
-/** 本阶段的内置默认参数;03 号工单接入设置后由 verge 配置提供。 */
+/** 内置默认参数:verge 设置未配置或非法时的兜底值(设置项见 03 号工单)。 */
 export const DEFAULT_SPEEDTEST_URL =
   'https://dl.google.com/chrome/mac/universal/stable/GGRO/googlechrome.dmg'
 export const DEFAULT_SPEEDTEST_WINDOW_SECS = 5
+
+/** 测速时长允许范围(秒):下限保证有数据可算,上限限制整组测速的流量消耗。 */
+export const MIN_SPEEDTEST_DURATION_SECS = 1
+export const MAX_SPEEDTEST_DURATION_SECS = 30
+
+/** 解析测速 URL:空白视为未配置,回落内置默认。 */
+export const resolveSpeedtestUrl = (configured?: string | null): string => {
+  const trimmed = configured?.trim()
+  return trimmed ? trimmed : DEFAULT_SPEEDTEST_URL
+}
+
+/** 解析测速时长(秒):非整数或超范围回落内置默认,夹在允许区间内。 */
+export const resolveSpeedtestDurationSecs = (
+  configured?: number | null,
+): number => {
+  if (
+    configured == null ||
+    !Number.isFinite(configured) ||
+    !Number.isInteger(configured)
+  ) {
+    return DEFAULT_SPEEDTEST_WINDOW_SECS
+  }
+  return Math.min(
+    MAX_SPEEDTEST_DURATION_SECS,
+    Math.max(MIN_SPEEDTEST_DURATION_SECS, configured),
+  )
+}

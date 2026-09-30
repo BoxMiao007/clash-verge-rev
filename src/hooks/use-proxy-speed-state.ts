@@ -1,6 +1,7 @@
 import { useLockFn } from 'ahooks'
 import { useCallback, useEffect, useReducer } from 'react'
 
+import { useVerge } from '@/hooks/use-verge'
 import speedManager, { type SpeedUpdate } from '@/services/speed'
 import {
   isInteractableMember,
@@ -8,8 +9,8 @@ import {
 } from '@/types/proxy-view'
 import {
   SPEED_TESTING,
-  DEFAULT_SPEEDTEST_URL,
-  DEFAULT_SPEEDTEST_WINDOW_SECS,
+  resolveSpeedtestDurationSecs,
+  resolveSpeedtestUrl,
 } from '@/utils/speed'
 
 const PRESET_PROXY_NAMES = [
@@ -39,6 +40,11 @@ export function useProxySpeedState(
   const unresolved = member.kind === 'unresolved'
   const isPreset = unresolved || PRESET_PROXY_NAMES.includes(name)
   const [speedState, setSpeedState] = useReducer(identity, INITIAL_SPEED)
+  const { verge } = useVerge()
+  const speedtestUrl = resolveSpeedtestUrl(verge?.default_speedtest_url)
+  const speedtestDurationSecs = resolveSpeedtestDurationSecs(
+    verge?.default_speedtest_duration,
+  )
 
   useEffect(() => {
     if (isPreset) return
@@ -69,12 +75,13 @@ export function useProxySpeedState(
   const onSpeed = useLockFn(async () => {
     if (!isInteractableMember(member)) return
     setSpeedState({ speed: SPEED_TESTING, updatedAt: Date.now() })
+    // 每次触发时读取最新设置,保存后下一次测速立即生效。
     setSpeedState(
       await speedManager.checkSpeed(
         member,
         groupName,
-        DEFAULT_SPEEDTEST_URL,
-        DEFAULT_SPEEDTEST_WINDOW_SECS,
+        speedtestUrl,
+        speedtestDurationSecs,
       ),
     )
   })

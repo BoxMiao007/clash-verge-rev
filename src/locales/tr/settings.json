@@ -415,13 +415,17 @@
         "autoDelayDetection": "Otomatik Gecikme Tespiti",
         "autoDelayDetectionInterval": "Otomatik Gecikme Tespiti Aralığı",
         "defaultLatencyTest": "Varsayılan Gecikme Testi",
-        "defaultLatencyTimeout": "Varsayılan Gecikme Zaman Aşımı"
+        "defaultLatencyTimeout": "Varsayılan Gecikme Zaman Aşımı",
+        "defaultSpeedtestUrl": "Speed Test URL",
+        "defaultSpeedtestDuration": "Speed Test Duration"
       },
       "tooltips": {
         "autoCloseConnections": "Vekil grup seçimi veya vekil modu değiştiğinde kurulan bağlantıları sonlandır",
         "enableBuiltinEnhanced": "Yapılandırma dosyası için uyumluluk işleme",
         "autoDelayDetection": "Arka planda mevcut düğümün gecikmesini periyodik olarak test eder",
-        "defaultLatencyTest": "Yalnızca HTTP istemci isteği testi için kullanılır ve yapılandırma dosyasında bir fark yaratmaz"
+        "defaultLatencyTest": "Yalnızca HTTP istemci isteği testi için kullanılır ve yapılandırma dosyasında bir fark yaratmaz",
+        "defaultSpeedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
+        "defaultSpeedtestDuration": "Download window of each speed test, between 1 and 30 seconds"
       },
       "options": {
         "proxyLayoutColumns": {

@@ -415,13 +415,17 @@
         "autoDelayDetection": "Automatische Latenzprüfung",
         "autoDelayDetectionInterval": "Intervall für automatische Latenzprüfung",
         "defaultLatencyTest": "Standard-Testlink",
-        "defaultLatencyTimeout": "Test-Timeout"
+        "defaultLatencyTimeout": "Test-Timeout",
+        "defaultSpeedtestUrl": "Speed Test URL",
+        "defaultSpeedtestDuration": "Speed Test Duration"
       },
       "tooltips": {
         "autoCloseConnections": "Wenn der ausgewählte Knoten in der Proxy-Gruppe oder der Proxy-Modus geändert wird, werden die bestehenden Verbindungen geschlossen.",
         "enableBuiltinEnhanced": "Kompatibilitätsbehandlung der Konfigurationsdatei",
         "autoDelayDetection": "Überprüft regelmäßig im Hintergrund die Latenz des aktuellen Knotens",
-        "defaultLatencyTest": "Dies wird nur für HTTP-Client-Anfragentests verwendet und hat keine Auswirkungen auf die Konfigurationsdatei."
+        "defaultLatencyTest": "Dies wird nur für HTTP-Client-Anfragentests verwendet und hat keine Auswirkungen auf die Konfigurationsdatei.",
+        "defaultSpeedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
+        "defaultSpeedtestDuration": "Download window of each speed test, between 1 and 30 seconds"
       },
       "options": {
         "proxyLayoutColumns": {

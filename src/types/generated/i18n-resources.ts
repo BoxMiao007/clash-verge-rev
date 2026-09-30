@@ -1118,6 +1118,8 @@ export interface TranslationResources {
             autoLogClean: string
             defaultLatencyTest: string
             defaultLatencyTimeout: string
+            defaultSpeedtestDuration: string
+            defaultSpeedtestUrl: string
             enableBuiltinEnhanced: string
             proxyLayoutColumns: string
           }
@@ -1135,6 +1137,8 @@ export interface TranslationResources {
             autoCloseConnections: string
             autoDelayDetection: string
             defaultLatencyTest: string
+            defaultSpeedtestDuration: string
+            defaultSpeedtestUrl: string
             enableBuiltinEnhanced: string
           }
         }
