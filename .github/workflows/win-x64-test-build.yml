@@ -1,0 +1,55 @@
+name: Win x64 Test Build
+
+# 本 fork 专用的 Windows x64 测试包构建:单平台、不经 release 流程,
+# 产物在 Actions artifact 中下载。用于合并前人工验收功能分支。
+#
+# 构建始终带 verge-dev feature(数据目录用 .dev 后缀、不走系统服务模式),
+# 与官方安装版完全隔离;配合被测分支上 tauri.conf 的 .dev identifier 使用。
+# dispatch 时用 --ref 指定要验收的分支,例如:
+#   gh workflow run win-x64-test-build.yml --ref feat/speedtest
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: win-x64-test-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-win-x64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.21.0'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download sidecar (mihomo)
+        run: pnpm run prebuild x86_64-pc-windows-msvc
+
+      - name: Build NSIS x64 (verge-dev variant)
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        run: pnpm build -- --features verge-dev --bundles nsis --target x86_64-pc-windows-msvc
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clash-verge-win-x64-test
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          if-no-files-found: error
