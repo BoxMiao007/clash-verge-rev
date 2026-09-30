@@ -6,6 +6,8 @@ import {
   MAX_SPEEDTEST_DURATION_SECS,
   MIN_SPEEDTEST_DURATION_SECS,
   SPEED_TESTING,
+  SPEED_TIMEOUT,
+  clampSpeedtestDurationSecs,
   compareBySpeed,
   classifySpeed,
   formatSpeed,
@@ -17,6 +19,7 @@ import {
 describe('classifySpeed', () => {
   test('语义归一与延迟状态机一致', () => {
     expect(classifySpeed(SPEED_TESTING)).toBe('testing')
+    expect(classifySpeed(SPEED_TIMEOUT)).toBe('timeout')
     expect(classifySpeed(-1)).toBe('untested')
     expect(classifySpeed(Number.NaN)).toBe('untested')
     expect(classifySpeed(0)).toBe('failed')
@@ -37,14 +40,16 @@ describe('formatSpeed', () => {
 
   test('状态文本', () => {
     expect(formatSpeed(SPEED_TESTING)).toBe('testing')
+    expect(formatSpeed(SPEED_TIMEOUT)).toBe('Timeout')
     expect(formatSpeed(-1)).toBe('-')
     expect(formatSpeed(0)).toBe('Failed')
   })
 })
 
 describe('formatSpeedColor', () => {
-  test('失败红色,结果按量级分色', () => {
+  test('超时/失败红色,结果按量级分色', () => {
     expect(formatSpeedColor(0)).toBe('error.main')
+    expect(formatSpeedColor(SPEED_TIMEOUT)).toBe('error.main')
     expect(formatSpeedColor(100 * 1024)).toBe('warning.main')
     expect(formatSpeedColor(2 * 1024 * 1024)).toBe('primary.main')
     expect(formatSpeedColor(8 * 1024 * 1024)).toBe('success.main')
@@ -60,12 +65,24 @@ describe('compareBySpeed', () => {
     expect(compareBySpeed(1024 * 1024, 1024 * 1024)).toBe(0)
   })
 
-  test('非测量结果排在有结果之后,彼此不分先后', () => {
+  test('非测量结果按 超时 > 失败 > 测量中 > 未测试 排后,彼此不分先后', () => {
     expect(compareBySpeed(1024, 0)).toBeLessThan(0)
+    expect(compareBySpeed(1024, SPEED_TIMEOUT)).toBeLessThan(0)
+    expect(compareBySpeed(SPEED_TIMEOUT, 0)).toBeLessThan(0)
     expect(compareBySpeed(0, -1)).toBeLessThan(0)
     expect(compareBySpeed(-1, SPEED_TESTING)).toBeGreaterThan(0)
-    expect(compareBySpeed(SPEED_TESTING, 0)).toBeLessThan(0)
+    // 测量中排在失败之后(与延迟 rank 同序)。
+    expect(compareBySpeed(SPEED_TESTING, 0)).toBeGreaterThan(0)
     expect(compareBySpeed(0, 0)).toBe(0)
+    expect(compareBySpeed(SPEED_TIMEOUT, SPEED_TIMEOUT)).toBe(0)
+  })
+})
+
+describe('clampSpeedtestDurationSecs', () => {
+  test('区间内原样返回,越界夹到边界', () => {
+    expect(clampSpeedtestDurationSecs(5)).toBe(5)
+    expect(clampSpeedtestDurationSecs(0)).toBe(MIN_SPEEDTEST_DURATION_SECS)
+    expect(clampSpeedtestDurationSecs(120)).toBe(MAX_SPEEDTEST_DURATION_SECS)
   })
 })
 

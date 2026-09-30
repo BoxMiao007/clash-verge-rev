@@ -7,6 +7,7 @@ import type {
 import { debugLog } from '@/utils/debug'
 import {
   SPEED_TESTING,
+  SPEED_TIMEOUT,
   DEFAULT_SPEEDTEST_URL,
   DEFAULT_SPEEDTEST_WINDOW_SECS,
 } from '@/utils/speed'
@@ -18,7 +19,7 @@ export type SpeedSnapshot = {
 const hashKey = (name: string, group: string) => `${group ?? ''}::${name}`
 
 export interface SpeedUpdate {
-  /** 字节/秒;-2 测量中;0 失败;>0 有结果(语义见 utils/speed.ts)。 */
+  /** 字节/秒;-2 测量中;-3 超时;0 失败;>0 有结果(语义见 utils/speed.ts)。 */
   speed: number
   elapsed?: number
   updatedAt: number
@@ -32,6 +33,21 @@ interface SpeedTestResult {
 }
 
 const CACHE_TTL = 30 * 60 * 1000
+
+/** 结果落定前的展示补齐下限:整体不足该时长时等待补足,避免状态闪烁过快。 */
+const MIN_MEASURE_DISPLAY_MS = 500
+
+/** 等待补齐展示时长,返回含补齐的总耗时(毫秒)。
+ *  本文件内的重复块提取;src/services/delay.ts 存在同样的内联写法,属上游文件不动。 */
+async function padToMinDisplayMs(startTime: number): Promise<number> {
+  const elapsedBefore = Date.now() - startTime
+  if (elapsedBefore < MIN_MEASURE_DISPLAY_MS) {
+    await new Promise((resolve) =>
+      setTimeout(resolve, MIN_MEASURE_DISPLAY_MS - elapsedBefore),
+    )
+  }
+  return Date.now() - startTime
+}
 
 class SpeedManager {
   private cache = new Map<string, SpeedUpdate>()
@@ -245,12 +261,9 @@ class SpeedManager {
     const startTime = Date.now()
 
     try {
-      // 后端负责限时与恢复 GLOBAL;前端超时仅兜底,防止异常时滞留测量中。
-      const timeoutPromise = new Promise<SpeedTestResult>((resolve) => {
-        setTimeout(
-          () => resolve({ bytes: 0, elapsedMs: 0, speedBps: 0 }),
-          windowSecs * 1000 + 10_000,
-        )
+      // 后端负责限时与恢复 GLOBAL;前端兜底超时仅防异常时滞留测量中,归入超时态。
+      const fallback = new Promise<number>((resolve) => {
+        setTimeout(() => resolve(SPEED_TIMEOUT), windowSecs * 1000 + 10_000)
       })
 
       const result = await Promise.race([
@@ -259,28 +272,25 @@ class SpeedManager {
           url,
           durationSecs: windowSecs,
         }),
-        timeoutPromise,
+        fallback,
       ])
 
-      const elapsedTime = Date.now() - startTime
-      if (elapsedTime < 500) {
-        await new Promise((resolve) => setTimeout(resolve, 500 - elapsedTime))
+      if (typeof result === 'number') {
+        // 兜底超时触发:命令迟迟未返回,与后端下载错误的失败态区分。
+        debugLog(`[SpeedManager] 前端兜底超时，代理: ${name}`)
+        const elapsed = await padToMinDisplayMs(startTime)
+        return this.setSpeed(name, group, result, { elapsed })
       }
 
-      const elapsed = Date.now() - startTime
+      const elapsed = await padToMinDisplayMs(startTime)
       debugLog(
         `[SpeedManager] 速度测试完成，代理: ${name}, 速度: ${result.speedBps} B/s`,
       )
       return this.setSpeed(name, group, result.speedBps, { elapsed })
     } catch (error) {
-      const elapsedTime = Date.now() - startTime
-      if (elapsedTime < 500) {
-        await new Promise((resolve) => setTimeout(resolve, 500 - elapsedTime))
-      }
-
+      const elapsed = await padToMinDisplayMs(startTime)
       console.error(`[SpeedManager] 速度测试出错，代理: ${name}`, error)
-      const elapsed = Date.now() - startTime
-      // 0 即失败态(下载失败/节点不通/超时一律落失败,不滞留测量中)。
+      // 0 即失败态:后端下载错误/HTTP 非 2xx/窗口内 0 字节,不滞留测量中。
       return this.setSpeed(name, group, 0, { elapsed })
     }
   }

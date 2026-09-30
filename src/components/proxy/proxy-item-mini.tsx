@@ -37,7 +37,7 @@ export const ProxyItemMini = (props: Props) => {
     member,
     group.name,
   )
-  // 速度: -2 测量中, -1 未测试, 0 失败, >0 字节/秒;与延迟并列展示
+  // -2 测量中, -3 超时, -1 未测试, 0 失败, >0 字节/秒
   const { speedValue, onSpeed } = useProxySpeedState(member, group.name)
 
   return (
@@ -227,7 +227,7 @@ export const ProxyItemMini = (props: Props) => {
             {t('shared.actions.speedCheck')}
           </Widget>
         )}
-        {!unresolved && speedValue >= 0 && (
+        {!unresolved && (speedValue >= 0 || speedValue === -3) && (
           // 显示下载速度(常驻,点击重测)
           <Widget
             className="the-speed"

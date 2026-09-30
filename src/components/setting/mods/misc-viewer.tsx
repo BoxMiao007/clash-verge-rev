@@ -16,8 +16,9 @@ import { useVerge } from '@/hooks/use-verge'
 import { showNotice } from '@/services/notice-service'
 import {
   DEFAULT_SPEEDTEST_URL,
-  MAX_SPEEDTEST_DURATION_SECS,
+  DEFAULT_SPEEDTEST_WINDOW_SECS,
   MIN_SPEEDTEST_DURATION_SECS,
+  clampSpeedtestDurationSecs,
   resolveSpeedtestDurationSecs,
 } from '@/utils/speed'
 
@@ -40,7 +41,7 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
     autoLogClean: 2,
     defaultLatencyTimeout: 10000,
     defaultSpeedtestUrl: '',
-    defaultSpeedtestDuration: 5,
+    defaultSpeedtestDuration: DEFAULT_SPEEDTEST_WINDOW_SECS,
   })
 
   useImperativeHandle(ref, () => ({
@@ -481,14 +482,11 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
             spellCheck="false"
             sx={{ width: 250, marginLeft: 'auto' }}
             value={values.defaultSpeedtestDuration}
-            placeholder="5"
+            placeholder={String(DEFAULT_SPEEDTEST_WINDOW_SECS)}
             onChange={(e) => {
               const parsed = parseInt(e.target.value, 10)
               const duration = Number.isFinite(parsed)
-                ? Math.min(
-                    MAX_SPEEDTEST_DURATION_SECS,
-                    Math.max(MIN_SPEEDTEST_DURATION_SECS, parsed),
-                  )
+                ? clampSpeedtestDurationSecs(parsed)
                 : MIN_SPEEDTEST_DURATION_SECS
               setValues((v) => ({ ...v, defaultSpeedtestDuration: duration }))
             }}

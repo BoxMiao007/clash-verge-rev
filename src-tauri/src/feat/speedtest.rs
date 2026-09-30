@@ -3,7 +3,7 @@
 //! 机制见 docs/adr/0001-download-speedtest-via-global-listener.md:配置生成时注入
 //! 一个仅绑定 127.0.0.1 的专用 mixed listener(`proxy: GLOBAL`,已由 01 号工单 spike
 //! 实测验证);测速命令按「读取 GLOBAL 当前选择 → PUT 切到被测节点 → 从专用端口
-//! 发起限时下载 → 无条件恢复 GLOBAL」执行。不触碰用户分组的选择,不写
+//! 发起限时下载 → 返回前同步恢复 GLOBAL」执行。不触碰用户分组的选择,不写
 //! record_selected_node。
 //!
 //! 已知取舍(ADR-0001):global 模式用户在测速窗口内流量会被波及;恢复 GLOBAL
@@ -13,6 +13,7 @@
 use anyhow::{Result, anyhow, bail};
 use clash_verge_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};
+use std::future::Future;
 use std::time::{Duration, Instant};
 
 use crate::config::Config;
@@ -24,7 +25,8 @@ pub const SPEEDTEST_LISTENER_NAME: &str = "verge-speedtest";
 pub const SPEEDTEST_BASE_PORT: u16 = 9666;
 /// 端口探测范围(mixed-port 被占时 mihomo 只记 error 不退出,必须主动避让)。
 const PORT_PROBE_ATTEMPTS: u16 = 16;
-/// 测速时长上下限(秒)。前端 03 号工单接入设置前,取值由内置默认提供。
+/// 测速时长上下限(秒)。前端 `src/utils/speed.ts` 持有同一份界限(输入夹取与
+/// 解析归一),跨语言无法共享常量,两处需同步修改;此处保留一份用于服务端校验。
 const MIN_DURATION_SECS: u64 = 1;
 const MAX_DURATION_SECS: u64 = 30;
 
@@ -178,21 +180,111 @@ fn remove_speedtest_listener(config: &mut Mapping) {
     }
 }
 
-/// 恢复 GLOBAL 选择的守卫:无论测速成功、失败还是 panic,Drop 都会派发恢复任务。
-struct GlobalSelectionGuard {
-    node: String,
+/// GLOBAL 选择读写的最小接缝:生产实现走 mihomo 插件客户端,测试注入假实现。
+///
+/// 方法显式返回 `impl Future + Send`:tauri 命令的 future 必须可跨线程轮询。
+trait GlobalProxyOps: Send + Sync + 'static {
+    fn global_now(&self) -> impl Future<Output = Result<Option<String>>> + Send;
+    fn select_global(&self, node: &str) -> impl Future<Output = Result<()>> + Send;
 }
 
-impl Drop for GlobalSelectionGuard {
-    fn drop(&mut self) {
-        let node = self.node.clone();
-        tokio::spawn(async move {
-            match Handle::mihomo().select_node_for_group("GLOBAL", &node).await {
-                Ok(()) => logging!(debug, Type::Core, "下载测速:已恢复 GLOBAL 选择: {node}"),
-                Err(err) => logging!(warn, Type::Core, "下载测速:恢复 GLOBAL 选择失败(仅记录): {err:#}"),
-            }
-        });
+/// 生产实现:经 Handle 的 mihomo 客户端读写 GLOBAL 组。
+struct MihomoGlobalOps;
+
+impl GlobalProxyOps for MihomoGlobalOps {
+    fn global_now(&self) -> impl Future<Output = Result<Option<String>>> + Send {
+        async {
+            Ok(Handle::mihomo()
+                .get_proxy_by_name("GLOBAL")
+                .await
+                .map(|global| global.now)?)
+        }
     }
+
+    fn select_global(&self, node: &str) -> impl Future<Output = Result<()>> + Send {
+        // 插件错误经 ? 归一到 anyhow::Error,与 trait 签名一致。
+        async move {
+            Handle::mihomo().select_node_for_group("GLOBAL", node).await?;
+            Ok(())
+        }
+    }
+}
+
+/// 恢复 GLOBAL 选择:命令返回前的同步恢复与守卫 Drop 的兜底恢复共用此函数。
+/// 失败只记日志,不向用户报错(mihomo 会把 GLOBAL 选择持久化到 cache.db,
+/// panic/取消路径也必须尽力尝试还原)。
+async fn restore_global_selection<O: GlobalProxyOps>(ops: &O, node: &str) {
+    match ops.select_global(node).await {
+        Ok(()) => logging!(debug, Type::Core, "下载测速:已恢复 GLOBAL 选择: {node}"),
+        Err(err) => logging!(warn, Type::Core, "下载测速:恢复 GLOBAL 选择失败(仅记录): {err:#}"),
+    }
+}
+
+/// GLOBAL 恢复守卫:正常路径由 [`GlobalSelectionGuard::restore`] 在命令返回前
+/// 同步恢复并置位;Drop 仅在未置位时(panic 展开、恢复 future 被中途取消)派发
+/// 后台恢复任务兜底——两条路径共用 [`restore_global_selection`]。
+struct GlobalSelectionGuard<O: GlobalProxyOps> {
+    ops: Option<O>,
+    node: String,
+    settled: bool,
+}
+
+impl<O: GlobalProxyOps> GlobalSelectionGuard<O> {
+    /// 正常路径:同步等待恢复完成后置位,Drop 不再重复派发。
+    async fn restore(mut self) {
+        if let Some(ops) = self.ops.as_ref() {
+            restore_global_selection(ops, &self.node).await;
+        }
+        self.settled = true;
+    }
+}
+
+impl<O: GlobalProxyOps> Drop for GlobalSelectionGuard<O> {
+    fn drop(&mut self) {
+        if self.settled {
+            return;
+        }
+        // panic/提前返回的兜底路径:恢复无法被等待,派发后台任务尽力还原。
+        let Some(ops) = self.ops.take() else {
+            return;
+        };
+        let node = self.node.clone();
+        tokio::spawn(async move { restore_global_selection(&ops, &node).await });
+    }
+}
+
+/// 核心流程:切到被测节点 → 限时下载 → 无条件恢复 GLOBAL,返回下载结果。
+///
+/// 正常路径在返回前同步 await 恢复完成:前端整组测速严格串行地逐个调用命令,
+/// 若恢复是派发不等待的后台任务,下一节点命令的「PUT GLOBAL 到新节点」可能抢在
+/// 恢复完成前执行,GLOBAL 最终状态顺序不定,后续节点会测到错误链路。
+async fn speedtest_via_global<O: GlobalProxyOps>(
+    ops: O,
+    node: &str,
+    download: impl Future<Output = Result<(u64, Duration)>> + Send,
+) -> Result<(u64, Duration)> {
+    let Some(original) = ops.global_now().await? else {
+        bail!("无法读取 GLOBAL 当前选择,取消本次下载测速");
+    };
+
+    // GLOBAL 已是被测节点时无需切换,守卫也就无需恢复。
+    let guard = if original == node {
+        None
+    } else {
+        ops.select_global(node).await?;
+        Some(GlobalSelectionGuard {
+            ops: Some(ops),
+            node: original,
+            settled: false,
+        })
+    };
+
+    let result = download.await;
+
+    if let Some(guard) = guard {
+        guard.restore().await;
+    }
+    result
 }
 
 fn validate_url(url: &str) -> Result<()> {
@@ -252,7 +344,7 @@ async fn timed_download(client: &reqwest::Client, url: &str, window: Duration) -
     Ok((bytes, start.elapsed()))
 }
 
-/// 单节点下载测速:切换 GLOBAL → 限时下载 → 无条件恢复 GLOBAL。
+/// 单节点下载测速:切换 GLOBAL → 限时下载 → 返回前无条件恢复 GLOBAL。
 pub async fn speedtest_node(name: String, url: String, duration_secs: u64) -> Result<SpeedTestResult> {
     validate_url(&url)?;
     let window = Duration::from_secs(clamp_duration(duration_secs));
@@ -265,41 +357,23 @@ pub async fn speedtest_node(name: String, url: String, duration_secs: u64) -> Re
         .ok_or_else(|| anyhow!("运行时配置尚未生成,无法执行下载测速"))?;
     let port = speedtest_listener_port(config).ok_or_else(|| anyhow!("下载测速通道未就绪,请重启内核后重试"))?;
 
-    let mihomo = Handle::mihomo();
-    let global = mihomo.get_proxy_by_name("GLOBAL").await?;
-    let Some(original) = global.now else {
-        bail!("无法读取 GLOBAL 当前选择,取消本次下载测速");
-    };
-    //GLOBAL 已是被测节点时无需切换,守卫也就无需恢复。
-    let guard = if original == name {
-        None
-    } else {
-        mihomo.select_node_for_group("GLOBAL", &name).await?;
-        Some(GlobalSelectionGuard { node: original })
-    };
+    // 客户端构建在切换 GLOBAL 之前:失败时无需触发恢复。
+    let client = build_download_client(port)?;
+    let (bytes, elapsed) = speedtest_via_global(MihomoGlobalOps, &name, timed_download(&client, &url, window)).await?;
 
-    let client = build_download_client(port);
-    let result = match client {
-        Ok(client) => match timed_download(&client, &url, window).await {
-            Ok((bytes, elapsed)) if bytes > 0 => Ok(SpeedTestResult {
-                bytes,
-                elapsed_ms: elapsed.as_millis() as u64,
-                speed_bps: calc_speed_bps(bytes, elapsed),
-            }),
-            Ok((_, elapsed)) => Err(anyhow!(
-                "窗口 {}ms 内未收到任何数据,节点可能不可用(用时 {}ms)",
-                window.as_millis(),
-                elapsed.as_millis()
-            )),
-            Err(err) => Err(err),
-        },
-        Err(err) => Err(err.into()),
-    };
+    if bytes == 0 {
+        bail!(
+            "窗口 {}ms 内未收到任何数据,节点可能不可用(用时 {}ms)",
+            window.as_millis(),
+            elapsed.as_millis()
+        );
+    }
 
-    // 守卫 Drop 恢复 GLOBAL;若本就是被测节点则无需恢复。
-    drop(guard);
-
-    result
+    Ok(SpeedTestResult {
+        bytes,
+        elapsed_ms: elapsed.as_millis() as u64,
+        speed_bps: calc_speed_bps(bytes, elapsed),
+    })
 }
 
 #[cfg(test)]
@@ -390,5 +464,80 @@ mod tests {
             Value::Sequence(vec![listener_entry("other", 12345)]),
         );
         assert_eq!(speedtest_listener_port(&config), None);
+    }
+
+    /// 假 GLOBAL 操作:记录 select 调用序列,可对每次 select 注入延迟,
+    /// 用于验证恢复与命令返回的先后关系。
+    struct FakeGlobalOps {
+        now: Option<String>,
+        select_delay: Duration,
+        calls: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    }
+
+    impl GlobalProxyOps for FakeGlobalOps {
+        fn global_now(&self) -> impl Future<Output = Result<Option<String>>> + Send {
+            async { Ok(self.now.clone()) }
+        }
+
+        fn select_global(&self, node: &str) -> impl Future<Output = Result<()>> + Send {
+            let node = node.to_string();
+            async move {
+                tokio::time::sleep(self.select_delay).await;
+                self.calls.lock().unwrap().push(node);
+                Ok(())
+            }
+        }
+    }
+
+    fn fake_ops(now: &str, select_delay: Duration) -> (FakeGlobalOps, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        (
+            FakeGlobalOps {
+                now: Some(now.into()),
+                select_delay,
+                calls: calls.clone(),
+            },
+            calls,
+        )
+    }
+
+    #[tokio::test]
+    async fn command_returns_only_after_slow_global_restore_completes() {
+        // 每次 select 耗时 50ms:若恢复仍是派发不等待的后台任务(旧实现),
+        // 命令返回时恢复尚未执行,序列会缺少最后一步,本测试即失败。
+        let (ops, calls) = fake_ops("origin", Duration::from_millis(50));
+
+        let result = speedtest_via_global(ops, "node-a", async { Ok((1000u64, Duration::from_millis(1))) }).await;
+
+        assert!(result.is_ok());
+        assert_eq!(
+            *calls.lock().unwrap(),
+            vec!["node-a".to_string(), "origin".to_string()],
+            "命令返回时 GLOBAL 必须已同步恢复到原选择"
+        );
+    }
+
+    #[tokio::test]
+    async fn restore_completes_even_when_download_fails() {
+        let (ops, calls) = fake_ops("origin", Duration::from_millis(50));
+
+        let result = speedtest_via_global(ops, "node-a", async { Err(anyhow!("下载失败")) }).await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            *calls.lock().unwrap(),
+            vec!["node-a".to_string(), "origin".to_string()],
+            "下载失败也必须在返回前同步恢复 GLOBAL"
+        );
+    }
+
+    #[tokio::test]
+    async fn no_switch_and_no_restore_when_global_already_on_node() {
+        let (ops, calls) = fake_ops("node-a", Duration::from_millis(50));
+
+        let result = speedtest_via_global(ops, "node-a", async { Ok((1000u64, Duration::from_millis(1))) }).await;
+
+        assert!(result.is_ok());
+        assert!(calls.lock().unwrap().is_empty(), "无需切换也就无需恢复");
     }
 }

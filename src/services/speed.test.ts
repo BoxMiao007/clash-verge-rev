@@ -9,6 +9,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }))
 
 import type { InteractableProxyMember } from '@/types/proxy-view'
+import { SPEED_TIMEOUT } from '@/utils/speed'
 
 import speedManager from './speed'
 
@@ -66,7 +67,7 @@ describe('状态转换', () => {
     expect(speedManager.getSpeed('bad', 'g')).toBe(0)
   })
 
-  test('前端兜底超时 → 失败状态(0)', async () => {
+  test('前端兜底超时 → 超时状态(-3),与后端错误的失败态区分', async () => {
     vi.useFakeTimers()
     try {
       const { invoke } = await import('@tauri-apps/api/core')
@@ -83,11 +84,20 @@ describe('状态转换', () => {
       await vi.advanceTimersByTimeAsync(1000 + 10_000 + 1000)
 
       const update = await pending
-      expect(update.speed).toBe(0)
-      expect(speedManager.getSpeed('hang', 'g')).toBe(0)
+      expect(update.speed).toBe(SPEED_TIMEOUT)
+      expect(speedManager.getSpeed('hang', 'g')).toBe(SPEED_TIMEOUT)
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  test('后端命令失败与兜底超时可区分:失败 0,超时 -3', async () => {
+    const { invoke } = await import('@tauri-apps/api/core')
+    vi.mocked(invoke).mockRejectedValueOnce(new Error('SPEEDTEST_FAILED'))
+
+    const failed = await speedManager.checkSpeed(node('bad'), 'g')
+    expect(failed.speed).toBe(0)
+    expect(failed.speed).not.toBe(SPEED_TIMEOUT)
   })
 
   test('provider 节点用 mihomo 侧名称调用命令', async () => {
