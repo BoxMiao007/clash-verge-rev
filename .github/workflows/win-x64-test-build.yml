@@ -45,14 +45,11 @@ jobs:
           NODE_OPTIONS: '--max_old_space_size=4096'
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        # 注意:verge-dev feature 与 nsis bundle 目标由被测分支自行配置
-        # (Cargo.toml default features / tauri.conf bundle.targets),
-        # 不走 tauri CLI 参数——pnpm 的 -- 转发会把参数误递给 cargo。
-        run: pnpm build
+        run: pnpm build -- --features verge-dev --bundles nsis --target x86_64-pc-windows-msvc
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: clash-verge-win-x64-test
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
           if-no-files-found: error
