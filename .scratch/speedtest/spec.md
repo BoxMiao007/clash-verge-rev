@@ -76,3 +76,7 @@ Status: ready-for-agent
 - 上游同步:本功能不可避免触碰上游文件(设置弹窗、配置生成管线、verge 配置结构体),按仓库约定将上游文件改动压缩到最小、新逻辑尽量收在本 fork 新增模块中。
 - 参考项目:faceair/clash-speedtest(默认测试文件与限时窗口参数来源)、KodeBarinn/mihomo-speedtest-rs(仅参考参数,其自行管理 mihomo 进程的模式不照搬)。
 - 实现时遵循仓库 AGENTS.md:feat 分支开发、验证门(pnpm typecheck && pnpm test + cargo check)、合入后在 AGENTS.md 功能清单登记。
+
+## Comments
+
+- 2026-09-30:五张工单全部完成后,按流程对 dev...feat/speedtest 做了两轴代码审查。修复提交 `c859e584`:①恢复竞态——测速命令返回前同步 await GLOBAL 恢复(此前 Drop 守卫异步恢复不等待,串行下下一节点 PUT 可能抢跑),Drop 仅作 panic 兜底,新增 3 个时序回归测试;②补齐超时态(编码 -3,与失败 0 区分),测量状态五态对齐 spec 故事 18;③删除 spec 外的 get_speedtest_listener_port;④时长上下限收敛到 utils/speed.ts 单一来源;⑤speed.ts 内部去重;⑥注释精简。审查中判定为「仓库既有模式、保持一致优于抽象」未修:hook 骨架相似、handleCheckAll 同构、item/mini 双份 Widget、组件内数字直比。
