@@ -2,7 +2,7 @@
 
 Status: ready-for-agent
 
-领域词汇见根目录 `CONTEXT.md`,路由机制决策见 `docs/adr/0001-download-speedtest-via-global-listener.md`。
+领域词汇见根目录 `GLOSSARY.md`,路由机制决策见 `docs/adr/0001-download-speedtest-via-global-listener.md`。
 
 ## Problem Statement
 

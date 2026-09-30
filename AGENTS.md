@@ -55,4 +55,4 @@ Issues 以本地 markdown 文件形式存放在 `.scratch/<feature>/`。见 `doc
 
 ### Domain docs
 
-单上下文布局:根目录 `CONTEXT.md` + `docs/adr/`,按需懒创建。见 `docs/agents/domain.md`。
+单上下文布局:根目录 `GLOSSARY.md` + `docs/adr/`,按需懒创建。见 `docs/agents/domain.md`。
