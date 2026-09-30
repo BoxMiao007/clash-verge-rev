@@ -31,9 +31,11 @@
     "tooltips": {
       "locate": "locate",
       "delayCheck": "Delay check",
+      "speedCheck": "Speed test",
       "sortDefault": "Sort by default",
       "sortDelay": "Sort by delay",
       "sortName": "Sort by name",
+      "sortSpeed": "Sort by download speed",
       "delayCheckUrl": "Delay check URL",
       "showBasic": "Proxy basic",
       "showDetail": "Proxy detail",

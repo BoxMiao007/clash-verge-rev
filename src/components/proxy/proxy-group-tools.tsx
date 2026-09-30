@@ -1,10 +1,12 @@
 import AccessTimeRounded from '@mui/icons-material/AccessTimeRounded'
+import BoltRounded from '@mui/icons-material/BoltRounded'
 import MyLocationRounded from '@mui/icons-material/MyLocationRounded'
 import NetworkCheckRounded from '@mui/icons-material/NetworkCheckRounded'
 import SearchOffRounded from '@mui/icons-material/SearchOffRounded'
 import SearchRounded from '@mui/icons-material/SearchRounded'
 import SortByAlphaRounded from '@mui/icons-material/SortByAlphaRounded'
 import SortRounded from '@mui/icons-material/SortRounded'
+import SpeedRounded from '@mui/icons-material/SpeedRounded'
 import VisibilityOffRounded from '@mui/icons-material/VisibilityOffRounded'
 import VisibilityRounded from '@mui/icons-material/VisibilityRounded'
 import WifiTetheringOffRounded from '@mui/icons-material/WifiTetheringOffRounded'
@@ -18,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 import { useVerge } from '@/hooks/use-verge'
 import delayManager from '@/services/delay'
 import { showNotice } from '@/services/notice-service'
+import { debugLog } from '@/utils/debug'
 import { isValidUrl } from '@/utils/network'
 
 import { BaseSearchBox, type SearchState } from '../base'
@@ -33,6 +36,7 @@ interface Props {
   headState: HeadState
   onLocation: () => void
   onCheckDelay: () => void
+  onSpeedCheck: () => void
   onHeadState: (val: Partial<HeadState>) => void
 }
 
@@ -44,6 +48,7 @@ export const ProxyGroupTools = memo(function ProxyGroupTools(props: Props) {
     groupName,
     headState,
     onCheckDelay,
+    onSpeedCheck,
     onHeadState,
     onLocation,
   } = props
@@ -189,11 +194,29 @@ export const ProxyGroupTools = memo(function ProxyGroupTools(props: Props) {
       <IconButton
         size="small"
         color="inherit"
+        title={t('proxies.page.tooltips.speedCheck')}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (!headState.open)
+            // eslint-disable-next-line @eslint-react/dom-no-flush-sync
+            flushSync(() => onHeadState({ open: true }))
+          debugLog(`[ProxyGroupTools] 点击速度测试按钮，组: ${groupName}`)
+          onSpeedCheck()
+        }}
+      >
+        <SpeedRounded fontSize="inherit" />
+      </IconButton>
+
+      <IconButton
+        size="small"
+        color="inherit"
         title={
           [
             t('proxies.page.tooltips.sortDefault'),
             t('proxies.page.tooltips.sortDelay'),
             t('proxies.page.tooltips.sortName'),
+            t('proxies.page.tooltips.sortSpeed'),
           ][sortType]
         }
         onClick={(e) => {
@@ -203,13 +226,16 @@ export const ProxyGroupTools = memo(function ProxyGroupTools(props: Props) {
             // eslint-disable-next-line @eslint-react/dom-no-flush-sync
             flushSync(() => onHeadState({ open: true }))
           onHeadState({
-            sortType: ((sortType + 1) % 3) as ProxySortType,
+            sortType: ((sortType + 1) % 4) as ProxySortType,
           })
         }}
       >
-        {sortType !== 1 && sortType !== 2 && <SortRounded fontSize="inherit" />}
+        {sortType !== 1 && sortType !== 2 && sortType !== 3 && (
+          <SortRounded fontSize="inherit" />
+        )}
         {sortType === 1 && <AccessTimeRounded fontSize="inherit" />}
         {sortType === 2 && <SortByAlphaRounded fontSize="inherit" />}
+        {sortType === 3 && <BoltRounded fontSize="inherit" />}
       </IconButton>
 
       <IconButton

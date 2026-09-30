@@ -31,9 +31,11 @@
     "tooltips": {
       "locate": "Nodo actual",
       "delayCheck": "Prueba de latencia",
+      "speedCheck": "Speed test",
       "sortDefault": "Ordenación predeterminada",
       "sortDelay": "Ordenar por latencia",
       "sortName": "Ordenar por nombre",
+      "sortSpeed": "Sort by download speed",
       "delayCheckUrl": "URL de prueba de latencia",
       "showBasic": "Ocultar detalles del nodo",
       "showDetail": "Mostrar detalles del nodo",

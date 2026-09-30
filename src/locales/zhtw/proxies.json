@@ -31,9 +31,11 @@
     "tooltips": {
       "locate": "目前節點",
       "delayCheck": "延遲測試",
+      "speedCheck": "Speed test",
       "sortDefault": "預設排序",
       "sortDelay": "按延遲排序",
       "sortName": "按名稱排序",
+      "sortSpeed": "Sort by download speed",
       "delayCheckUrl": "延遲測試網址",
       "showBasic": "隱藏節點細節",
       "showDetail": "展示節點細節",

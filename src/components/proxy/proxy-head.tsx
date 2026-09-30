@@ -1,5 +1,6 @@
 import {
   AccessTimeRounded,
+  BoltRounded,
   MyLocationRounded,
   NetworkCheckRounded,
   SearchOffRounded,
@@ -10,6 +11,7 @@ import {
   WifiTetheringOffRounded,
   SortByAlphaRounded,
   SortRounded,
+  SpeedRounded,
 } from '@mui/icons-material'
 import { Box, IconButton, TextField, type SxProps } from '@mui/material'
 import { useEffect, useState } from 'react'
@@ -32,6 +34,7 @@ interface Props {
   headState: HeadState
   onLocation: () => void
   onCheckDelay: () => void
+  onSpeedCheck: () => void
   onHeadState: (val: Partial<HeadState>) => void
 }
 
@@ -45,6 +48,7 @@ export const ProxyHead = ({
   onHeadState,
   onLocation,
   onCheckDelay,
+  onSpeedCheck,
 }: Props) => {
   const {
     showType,
@@ -110,20 +114,34 @@ export const ProxyHead = ({
       <IconButton
         size="small"
         color="inherit"
+        title={t('proxies.page.tooltips.speedCheck')}
+        onClick={() => {
+          debugLog(`[ProxyHead] 点击速度测试按钮，组: ${groupName}`)
+          onSpeedCheck()
+        }}
+      >
+        <SpeedRounded />
+      </IconButton>
+
+      <IconButton
+        size="small"
+        color="inherit"
         title={
           [
             t('proxies.page.tooltips.sortDefault'),
             t('proxies.page.tooltips.sortDelay'),
             t('proxies.page.tooltips.sortName'),
+            t('proxies.page.tooltips.sortSpeed'),
           ][sortType]
         }
         onClick={() =>
-          onHeadState({ sortType: ((sortType + 1) % 3) as ProxySortType })
+          onHeadState({ sortType: ((sortType + 1) % 4) as ProxySortType })
         }
       >
-        {sortType !== 1 && sortType !== 2 && <SortRounded />}
+        {sortType !== 1 && sortType !== 2 && sortType !== 3 && <SortRounded />}
         {sortType === 1 && <AccessTimeRounded />}
         {sortType === 2 && <SortByAlphaRounded />}
+        {sortType === 3 && <BoltRounded />}
       </IconButton>
 
       <IconButton

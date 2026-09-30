@@ -1,7 +1,9 @@
 import { afterEach, expect, test, vi } from 'vitest'
 
 import delayManager from '@/services/delay'
+import speedManager from '@/services/speed'
 import { compareByDelay } from '@/utils/delay'
+import { SPEED_TESTING } from '@/utils/speed'
 
 import { filterSort } from './use-filter-sort'
 import type { ResolvedMemberOccurrence } from './use-render-list'
@@ -88,4 +90,21 @@ test('reads each occurrence once and observes cache updates and expiry on the ne
   expect(filterSort(list, 'expiry', '', 0)).toBe(list)
   filterSort(list, 'expiry', '', 2)
   expect(get).not.toHaveBeenCalled()
+})
+
+test('speed tier sorts measured descending first and the rest last, keeping input order on ties', () => {
+  const group = 'sort-speed'
+  const list = [node(0, 0), node(1, 0), node(2, 0), node(3, 0), node(4, 0)]
+  // 名称即 `${memberIndex}`:3 有结果(最快)、2 有结果(较慢)、1 测量中、4 失败、0 未测试。
+  speedManager.setSpeed('2', group, 500_000)
+  speedManager.setSpeed('3', group, 2_000_000)
+  speedManager.setSpeed('1', group, SPEED_TESTING)
+  speedManager.setSpeed('4', group, 0)
+
+  const result = filterSort(list, group, '', 3)
+
+  const expectedNames = ['3', '2', '1', '4', '0']
+  expect(result.map(({ member }) => member.ref.name)).toEqual(expectedNames)
+  // 排序不得复制成员对象:结果里仍是原列表中的同一 occurrence。
+  expectedNames.forEach((name, i) => expect(result[i]).toBe(list[Number(name)]))
 })

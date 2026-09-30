@@ -24,6 +24,7 @@ import { useProxySelection } from '@/hooks/use-proxy-selection'
 import { useVerge } from '@/hooks/use-verge'
 import { useProxiesData, useSystemData } from '@/providers/app-data-context'
 import delayManager from '@/services/delay'
+import speedManager from '@/services/speed'
 import {
   isInteractableMember,
   resolveMember,
@@ -31,6 +32,10 @@ import {
   type ResolvedProxyMember,
 } from '@/types/proxy-view'
 import { debugLog } from '@/utils/debug'
+import {
+  resolveSpeedtestDurationSecs,
+  resolveSpeedtestUrl,
+} from '@/utils/speed'
 
 import { ProxyEmptyState } from './proxy-empty-state'
 import {
@@ -103,6 +108,12 @@ function useProxyRenderState(
 
   const timeout = verge?.default_latency_timeout || 10000
 
+  // 与单项测速(use-proxy-speed-state)同一来源:verge 设置经解析函数落到内置默认。
+  const speedtestUrl = resolveSpeedtestUrl(verge?.default_speedtest_url)
+  const speedtestDurationSecs = resolveSpeedtestDurationSecs(
+    verge?.default_speedtest_duration,
+  )
+
   const handleCheckAll = useStableCallback(
     useLockFn(async (groupName: string) => {
       debugLog(`[ProxyGroups] 开始测试所有延迟，组: ${groupName}`)
@@ -131,6 +142,45 @@ function useProxyRenderState(
         debugLog(`[ProxyGroups] 延迟测试完成，组: ${groupName}`)
       } catch (error) {
         console.error(`[ProxyGroups] 延迟测试出错，组: ${groupName}`, error)
+      } finally {
+        onProxies()
+      }
+    }),
+  )
+
+  const handleSpeedCheckAll = useStableCallback(
+    useLockFn(async (groupName: string) => {
+      debugLog(`[ProxyGroups] 开始测试所有下载速度，组: ${groupName}`)
+
+      const group =
+        proxyView?.groups.find(({ name }) => name === groupName) ??
+        (proxyView?.global?.name === groupName ? proxyView.global : undefined)
+      const occurrences =
+        proxyView && group
+          ? group.members.map((member, memberIndex) => ({
+              memberIndex,
+              member: resolveMember(proxyView, member),
+            }))
+          : []
+      const interactable = occurrences
+        .map(({ member }) => member)
+        .filter(isInteractableMember)
+
+      debugLog(`[ProxyGroups] 找到代理数量: ${interactable.length}`)
+      debugLog(
+        `[ProxyGroups] 测速URL: ${speedtestUrl}, 测速窗口: ${speedtestDurationSecs}s`,
+      )
+
+      try {
+        await speedManager.checkListSpeed(
+          interactable,
+          groupName,
+          speedtestUrl,
+          speedtestDurationSecs,
+        )
+        debugLog(`[ProxyGroups] 速度测试完成，组: ${groupName}`)
+      } catch (error) {
+        console.error(`[ProxyGroups] 速度测试出错，组: ${groupName}`, error)
       } finally {
         onProxies()
       }
@@ -174,6 +224,7 @@ function useProxyRenderState(
     onProxies,
     onHeadState,
     handleCheckAll,
+    handleSpeedCheckAll,
     saveScrollPosition,
     getScrollPosition,
   }
@@ -207,6 +258,7 @@ function ChainProxyGroups(props: {
     renderList,
     onHeadState,
     handleCheckAll,
+    handleSpeedCheckAll,
     getScrollPosition,
     saveScrollPosition,
   } = useProxyRenderState(mode, true, activeSelectedGroup)
@@ -348,6 +400,7 @@ function ChainProxyGroups(props: {
         activeStickyIndex={activeStickyIndex}
         measureElement={virtualizer.measureElement}
         onCheckAll={handleCheckAll}
+        onSpeedCheckAll={handleSpeedCheckAll}
         onHeadState={onHeadState}
         onLocation={handleLocation}
         onGroupSelect={setSelectedGroup}
@@ -366,6 +419,7 @@ function NormalProxyGroups(props: { mode: string }) {
     onProxies,
     onHeadState,
     handleCheckAll,
+    handleSpeedCheckAll,
     getScrollPosition,
     saveScrollPosition,
   } = useProxyRenderState(mode, false, null)
@@ -541,6 +595,7 @@ function NormalProxyGroups(props: { mode: string }) {
         stickyed={stickyed}
         onLocation={handleLocation}
         onCheckAll={handleCheckAll}
+        onSpeedCheckAll={handleSpeedCheckAll}
         onHeadState={async (groupName, patch) => {
           if (stickyed && patch.filterText !== undefined) {
             handleGroupLocationByName(groupName)
@@ -555,6 +610,7 @@ function NormalProxyGroups(props: { mode: string }) {
     [
       handleChangeProxy,
       handleCheckAll,
+      handleSpeedCheckAll,
       onHeadState,
       handleLocation,
       handleGroupToggle,
@@ -569,11 +625,18 @@ function NormalProxyGroups(props: { mode: string }) {
         item={item}
         onLocation={handleLocation}
         onCheckAll={handleCheckAll}
+        onSpeedCheckAll={handleSpeedCheckAll}
         onHeadState={onHeadState}
         onChangeProxy={handleChangeProxy}
       />
     ),
-    [handleChangeProxy, handleCheckAll, onHeadState, handleLocation],
+    [
+      handleChangeProxy,
+      handleCheckAll,
+      handleSpeedCheckAll,
+      onHeadState,
+      handleLocation,
+    ],
   )
 
   if (!hasRenderableItems(renderList)) return emptyList

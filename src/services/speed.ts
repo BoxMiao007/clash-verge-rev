@@ -42,6 +42,9 @@ class SpeedManager {
   // Consumers compare snapshot identity; replace it only when the group settles.
   private groupSnapshots = new Map<string, SpeedSnapshot>()
 
+  // Suppress sort notifications until every measurement in a group batch settles.
+  private activeBatches = new Map<string, number>()
+
   private pendingItemUpdates = new Map<string, SpeedUpdate[]>()
   private pendingGroupUpdates = new Set<string>()
   private itemFlushScheduled = false
@@ -117,6 +120,7 @@ class SpeedManager {
   }
 
   private queueGroupNotification(group: string) {
+    if ((this.activeBatches.get(group) ?? 0) > 0) return
     this.groupSnapshots.delete(group)
     this.pendingGroupUpdates.add(group)
     this.scheduleGroupFlush()
@@ -209,12 +213,23 @@ class SpeedManager {
     return update ? update.speed : -1
   }
 
-  /** 与延迟同一套测量状态机:测量中 → 有结果/失败;结果不足 500ms 补齐,避免状态闪烁。 */
+  /** A single test may notify immediately; a batch defers notification until it settles. */
   async checkSpeed(
     member: InteractableProxyMember,
     group: string,
     url: string = DEFAULT_SPEEDTEST_URL,
     windowSecs: number = DEFAULT_SPEEDTEST_WINDOW_SECS,
+  ): Promise<SpeedUpdate> {
+    const update = await this.measureSpeed(member, group, url, windowSecs)
+    this.queueGroupNotification(group)
+    return update
+  }
+
+  private async measureSpeed(
+    member: InteractableProxyMember,
+    group: string,
+    url: string,
+    windowSecs: number,
   ): Promise<SpeedUpdate> {
     const name = member.ref.name
     const apiName =
@@ -256,9 +271,7 @@ class SpeedManager {
       debugLog(
         `[SpeedManager] 速度测试完成，代理: ${name}, 速度: ${result.speedBps} B/s`,
       )
-      const update = this.setSpeed(name, group, result.speedBps, { elapsed })
-      this.queueGroupNotification(group)
-      return update
+      return this.setSpeed(name, group, result.speedBps, { elapsed })
     } catch (error) {
       const elapsedTime = Date.now() - startTime
       if (elapsedTime < 500) {
@@ -268,10 +281,55 @@ class SpeedManager {
       console.error(`[SpeedManager] 速度测试出错，代理: ${name}`, error)
       const elapsed = Date.now() - startTime
       // 0 即失败态(下载失败/节点不通/超时一律落失败,不滞留测量中)。
-      const update = this.setSpeed(name, group, 0, { elapsed })
-      this.queueGroupNotification(group)
-      return update
+      return this.setSpeed(name, group, 0, { elapsed })
     }
+  }
+
+  /** 整组测速:严格串行(切换 GLOBAL 互斥,并发是错误形态),失败节点不阻塞其余;单项通知即时、分组通知延后到收尾。 */
+  async checkListSpeed(
+    proxies: InteractableProxyMember[],
+    group: string,
+    url: string = DEFAULT_SPEEDTEST_URL,
+    windowSecs: number = DEFAULT_SPEEDTEST_WINDOW_SECS,
+  ) {
+    debugLog(
+      `[SpeedManager] 批量测试速度开始，组: ${group}, 数量: ${proxies.length}`,
+    )
+    this.activeBatches.set(group, (this.activeBatches.get(group) ?? 0) + 1)
+    proxies.forEach(({ ref }) => {
+      this.setSpeed(ref.name, group, SPEED_TESTING)
+    })
+
+    const startTime = Date.now()
+
+    try {
+      for (const member of proxies) {
+        const name = member.ref.name
+        try {
+          await this.measureSpeed(member, group, url, windowSecs)
+        } catch (error) {
+          // 单个节点的意外异常不拖垮整组;结果落失败态,继续下一个。
+          console.error(
+            `[SpeedManager] 批量测试单个代理出错，代理: ${name}`,
+            error,
+          )
+          this.setSpeed(name, group, 0)
+        }
+      }
+    } finally {
+      // Always release the batch and notify; otherwise failures leave stale sort state.
+      const remaining = (this.activeBatches.get(group) ?? 1) - 1
+      if (remaining > 0) {
+        this.activeBatches.set(group, remaining)
+      } else {
+        this.activeBatches.delete(group)
+        this.queueGroupNotification(group)
+      }
+    }
+    const totalTime = Date.now() - startTime
+    debugLog(
+      `[SpeedManager] 批量测试速度完成，组: ${group}, 总耗时: ${totalTime}ms`,
+    )
   }
 }
 

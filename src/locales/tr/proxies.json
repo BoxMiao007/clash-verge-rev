@@ -31,9 +31,11 @@
     "tooltips": {
       "locate": "konum",
       "delayCheck": "Gecikme kontrolü",
+      "speedCheck": "Speed test",
       "sortDefault": "Varsayılana göre sırala",
       "sortDelay": "Gecikmeye göre sırala",
       "sortName": "İsme göre sırala",
+      "sortSpeed": "Sort by download speed",
       "delayCheckUrl": "Gecikme kontrol URL'si",
       "showBasic": "Temel Vekil",
       "showDetail": "Vekil detayı",

@@ -156,3 +156,180 @@ describe('监听通知', () => {
     stop()
   })
 })
+
+type Gate = {
+  promise: Promise<{ bytes: number; elapsedMs: number; speedBps: number }>
+  release: (value: {
+    bytes: number
+    elapsedMs: number
+    speedBps: number
+  }) => void
+}
+
+const manualGate = (): Gate => {
+  let release!: Gate['release']
+  const promise = new Promise<
+    Gate['promise'] extends Promise<infer V> ? V : never
+  >((resolve) => {
+    release = resolve
+  })
+  return { promise, release }
+}
+
+describe('批量串行调度', () => {
+  test('严格串行:前一节点完成才发起下一个,单项结果逐个通知,分组通知延后到收尾', async () => {
+    vi.useFakeTimers()
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const members = [node('b1'), node('b2'), node('b3')]
+
+      const gates = members.map(() => manualGate())
+      const calls: string[] = []
+      members.forEach((member, index) => {
+        vi.mocked(invoke).mockImplementationOnce((_cmd, args) => {
+          calls.push((args as { name: string }).name)
+          return gates[index].promise
+        })
+      })
+
+      const seen: Array<[string, number]> = []
+      members.forEach(({ ref }) =>
+        speedManager.setListener(ref.name, 'batch', (update) =>
+          seen.push([ref.name, update.speed]),
+        ),
+      )
+
+      let settles = 0
+      const unsubscribe = speedManager.addGroupListener('batch', () => {
+        settles += 1
+      })
+
+      try {
+        const pending = speedManager.checkListSpeed(
+          members,
+          'batch',
+          'https://example.com/file',
+          1,
+        )
+        await vi.advanceTimersByTimeAsync(0)
+        // 整组先进入测量中,但只发起了第一个节点 → 严格串行。
+        expect(calls).toEqual(['b1'])
+        expect(speedManager.getSpeed('b2', 'batch')).toBe(-2)
+
+        gates[0].release({ bytes: 1, elapsedMs: 1, speedBps: 111 })
+        await vi.advanceTimersByTimeAsync(600)
+        // b1 完成即更新单项显示并发起 b2;分组通知被批量抑制。
+        expect(seen).toContainEqual(['b1', 111])
+        expect(calls).toEqual(['b1', 'b2'])
+        expect(settles).toBe(0)
+
+        gates[1].release({ bytes: 1, elapsedMs: 1, speedBps: 222 })
+        await vi.advanceTimersByTimeAsync(600)
+        expect(seen).toContainEqual(['b2', 222])
+        expect(calls).toEqual(['b1', 'b2', 'b3'])
+        expect(settles).toBe(0)
+
+        gates[2].release({ bytes: 1, elapsedMs: 1, speedBps: 333 })
+        // 先推进末位的 500ms 补齐窗口,再等整批收尾。
+        await vi.advanceTimersByTimeAsync(600)
+        await pending
+        await vi.advanceTimersByTimeAsync(0)
+        expect(seen).toContainEqual(['b3', 333])
+        // 收尾才通知一次分组监听器。
+        expect(settles).toBe(1)
+      } finally {
+        members.forEach(({ ref }) =>
+          speedManager.removeListener(ref.name, 'batch'),
+        )
+        unsubscribe()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('失败节点落失败态(0),不阻塞其余节点继续', async () => {
+    vi.useFakeTimers()
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      vi.mocked(invoke)
+        .mockImplementationOnce(async () => ({
+          bytes: 1,
+          elapsedMs: 1,
+          speedBps: 111,
+        }))
+        .mockRejectedValueOnce(new Error('SPEEDTEST_FAILED'))
+        .mockImplementationOnce(async () => ({
+          bytes: 1,
+          elapsedMs: 1,
+          speedBps: 333,
+        }))
+
+      const pending = speedManager.checkListSpeed(
+        [node('f1'), node('f2'), node('f3')],
+        'fail-batch',
+        'https://example.com/file',
+        1,
+      )
+      await vi.advanceTimersByTimeAsync(2000)
+      await pending
+
+      expect(speedManager.getSpeed('f1', 'fail-batch')).toBe(111)
+      expect(speedManager.getSpeed('f2', 'fail-batch')).toBe(0)
+      expect(speedManager.getSpeed('f3', 'fail-batch')).toBe(333)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('进行中重复触发:分组通知在所有批次收尾后仅一次', async () => {
+    vi.useFakeTimers()
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const firstGate = manualGate()
+      const secondGate = manualGate()
+      vi.mocked(invoke)
+        .mockImplementationOnce(() => firstGate.promise)
+        .mockImplementationOnce(() => secondGate.promise)
+
+      let settles = 0
+      const unsubscribe = speedManager.addGroupListener('overlap', () => {
+        settles += 1
+      })
+
+      try {
+        const first = speedManager.checkListSpeed(
+          [node('o1')],
+          'overlap',
+          'https://example.com/file',
+          1,
+        )
+        const second = speedManager.checkListSpeed(
+          [node('o2')],
+          'overlap',
+          'https://example.com/file',
+          1,
+        )
+        await vi.advanceTimersByTimeAsync(0)
+        expect(settles).toBe(0)
+
+        firstGate.release({ bytes: 1, elapsedMs: 1, speedBps: 1 })
+        await vi.advanceTimersByTimeAsync(600)
+        await first
+        await vi.advanceTimersByTimeAsync(0)
+        // 第二批仍在进行,抑制保持。
+        expect(settles).toBe(0)
+
+        secondGate.release({ bytes: 1, elapsedMs: 1, speedBps: 2 })
+        await vi.advanceTimersByTimeAsync(600)
+        await second
+        await vi.advanceTimersByTimeAsync(0)
+        expect(settles).toBe(1)
+      } finally {
+        unsubscribe()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
