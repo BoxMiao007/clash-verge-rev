@@ -12,8 +12,21 @@
 ## 上游同步
 
 - 节奏:每 1~2 周或上游发版后同步一次,不长期积压。
-- 流程:`git fetch upstream` → 先总结 `upstream/dev` 新提交 → merge 进 `dev` → 有冲突逐个处理 → `pnpm typecheck && pnpm build` 通过后结束。
-- 本文件与上游冲突时,一律保留本 fork 版本。
+- **合并前:**
+  - 工作区必须干净;有未提交改动先提交或 stash,并向用户说明放到了哪里。
+  - 显式 `git fetch upstream`,不用 `git pull`。
+  - 先总结 `upstream/dev` 新提交,并标注与本 fork 功能可能重叠的文件。
+  - 若发现上游历史被重写(上次合并点不再是 `upstream/dev` 的祖先),停下向用户确认,不强行合并。
+- **合并中:**
+  - 冲突逐个解决:先弄清两边意图再融合;本 fork 已有功能不可被丢弃或绕过;禁止为省事整体取单边。
+  - 无法确定取舍时停下向用户确认,不猜。
+  - 本文件(`AGENTS.md`)冲突一律保留本 fork 版本。
+  - 合并搞砸可 `git merge --abort` 完整回到合并前状态,已提交的内容不受影响。
+- **合并后:**
+  - 依赖文件有变更(package.json / pnpm-lock.yaml / Cargo.toml / Cargo.lock)先 `pnpm install` 再验证。
+  - 验证门:`pnpm typecheck && pnpm test`,以及 `src-tauri` 目录下 `cargo check`。全部通过才算完成。
+  - `pnpm build` 是完整打包(Rust 全量编译,慢),只在需要产出安装包时执行,不作为每次同步的验证步骤。
+  - 验证通过后推送,目标只能是 `origin`。
 
 ## 降低合并冲突的约定
 
