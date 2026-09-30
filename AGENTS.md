@@ -20,3 +20,17 @@
 - 能通过新增文件接入的功能,不修改上游既有文件。
 - 提交信息写清改动意图(做什么、为什么),便于合并冲突时判断取舍。
 - 本 fork 内提交信息用简体中文;如向上游提交 PR,遵循上游仓库的契约(英文提交、Conventional Commits 等)。
+
+## Agent skills
+
+### Issue tracker
+
+Issues 以本地 markdown 文件形式存放在 `.scratch/<feature>/`。见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+默认五角色词汇表(needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix)。见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单上下文布局:根目录 `CONTEXT.md` + `docs/adr/`,按需懒创建。见 `docs/agents/domain.md`。
