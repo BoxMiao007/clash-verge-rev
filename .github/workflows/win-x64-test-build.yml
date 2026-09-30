@@ -1,0 +1,61 @@
+name: Win x64 Test Build
+
+# 本 fork 专用的测试包构建:只出 Windows x64 NSIS 安装包,不经 release 流程。
+# 用于在合并前人工验收功能分支,产物在 Actions artifact 中下载。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: win-x64-test-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-win-x64:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.21.0'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download sidecar (mihomo)
+        run: pnpm run prebuild x86_64-pc-windows-msvc
+
+      # createUpdaterArtifacts 为 true,构建会产出 updater 附加产物并要求签名;
+      # 本 fork 无签名密钥,现场生成一次性密钥满足构建,仅用于测试包。
+      - name: Generate throwaway updater signing key
+        shell: bash
+        run: |
+          pnpm tauri signer generate -w "$RUNNER_TEMP/ci-updater.key" --password ""
+          {
+            echo 'TAURI_SIGNING_PRIVATE_KEY<<KEYEOF'
+            cat "$RUNNER_TEMP/ci-updater.key"
+            echo 'KEYEOF'
+          } >> "$GITHUB_ENV"
+          echo 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD=' >> "$GITHUB_ENV"
+
+      - name: Build NSIS x64
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+        run: pnpm build -- --bundles nsis --target x86_64-pc-windows-msvc
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clash-verge-win-x64-test
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          if-no-files-found: error
