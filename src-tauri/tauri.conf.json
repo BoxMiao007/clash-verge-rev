@@ -3,6 +3,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "bundle": {
     "active": true,
+    "targets": ["nsis"],
     "longDescription": "Clash Verge Rev",
     "icon": [
       "icons/32x32.png",
