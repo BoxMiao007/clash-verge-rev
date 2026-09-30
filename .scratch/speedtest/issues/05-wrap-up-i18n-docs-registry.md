@@ -4,12 +4,20 @@
 
 **Blocked by:** 03、04(全部功能面就绪后收尾)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] 全部 locale 的测速相关 key 无缺译
-- [ ] 功能清单已登记,README 流量预期说明就位
-- [ ] 验证门全过(`pnpm typecheck && pnpm test`、`cargo check`)
-- [ ] 人工巡检清单已输出到本工单 Comments
+- [x] 全部 locale 的测速相关 key 无缺译(73 处真实翻译,i18n 对齐 13 locale missing=0;修正了 zhtw 的 3 处漏译)
+- [x] 功能清单已登记,README 流量预期说明就位(占位行「暂无登记」由主会话随结题移除)
+- [x] 验证门全过(`pnpm typecheck && pnpm test` 51 项、`cargo check`)
+- [x] 人工巡检清单已输出到本工单 Comments(见下,7 组)
+
+## Answer
+
+提交 `69a77b52`(13 语言真实翻译,术语对齐各 locale 既有延迟测试词汇)与 `d4bc8622`(README 功能介绍 + 流量预期、AGENTS.md 功能清单登记)。
+
+- 翻译覆盖 key:`shared.actions.speedCheck`、`proxies.page.tooltips.speedCheck/sortSpeed`、`settings.modals.misc.fields.defaultSpeedtest*` 及对应 tooltips。
+- 小语种(tt 等)基于该 locale 既有借词风格撰写,未经母语者校对;各语言字段名是否带「默认」前缀跟随 locale 内部习惯。
+- `pnpm i18n:format` 有一项上游遗留告警 `missing-source: service.legacy`,与本次改动无关,未处理。
 
 ## Comments
 
@@ -40,4 +48,3 @@
 7. **重启后速度清零与延迟一致**
    - 操作:测出若干速度结果后重启应用。
    - 预期:所有节点速度回到未测试状态(与延迟行为一致);再次测速可重新得到结果。
-
