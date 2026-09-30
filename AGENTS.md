@@ -15,7 +15,7 @@
 - **合并前:**
   - 工作区必须干净;有未提交改动先提交或 stash,并向用户说明放到了哪里。
   - 显式 `git fetch upstream`,不用 `git pull`。
-  - 先总结 `upstream/dev` 新提交,并标注与本 fork 功能可能重叠的文件。
+  - 先总结 `upstream/dev` 新提交,并对照下方「功能清单」标注可能与本 fork 功能重叠的文件。
   - 若发现上游历史被重写(上次合并点不再是 `upstream/dev` 的祖先),停下向用户确认,不强行合并。
 - **合并中:**
   - 冲突逐个解决:先弄清两边意图再融合;本 fork 已有功能不可被丢弃或绕过;禁止为省事整体取单边。
@@ -26,7 +26,16 @@
   - 依赖文件有变更(package.json / pnpm-lock.yaml / Cargo.toml / Cargo.lock)先 `pnpm install` 再验证。
   - 验证门:`pnpm typecheck && pnpm test`,以及 `src-tauri` 目录下 `cargo check`。全部通过才算完成。
   - `pnpm build` 是完整打包(Rust 全量编译,慢),只在需要产出安装包时执行,不作为每次同步的验证步骤。
-  - 验证通过后推送,目标只能是 `origin`。
+  - 验证门通过后做功能巡检:用 `git diff <上一个 sync 标签>..upstream/dev --name-only` 列出本次同步引入的上游改动,对照「功能清单」的关键文件,输出受影响功能报告——波及哪些功能、判断依据、建议用户在应用里实际验证的点;没有历史标签时以本次合并的 merge-base 为基准。
+  - 巡检完成后打标签 `sync/<YYYY-MM-DD>`,与代码一起推送到 `origin`(只能推 `origin`)。
+
+## 功能清单
+
+本 fork 相对上游的自有功能登记处:新功能合入 `dev` 时必须登记一行,功能下线时移除。agent 会话以此了解本 fork 有哪些功能;设计背景见 `.scratch/<feature>/` 的 spec,代码演变见 git 历史(`git log upstream/dev..dev --no-merges`)。
+
+| 功能 | 一句话说明 | 关键文件/入口 | 引入提交 |
+| ---- | ---------- | -------------- | -------- |
+| (暂无登记,第一个功能合入时添加) | | | |
 
 ## 降低合并冲突的约定
 
