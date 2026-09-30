@@ -12,7 +12,7 @@ import {
   DEFAULT_SPEEDTEST_WINDOW_SECS,
 } from '@/utils/speed'
 
-export type SpeedSnapshot = {
+type SpeedSnapshot = {
   of: (member: ResolvedProxyMember) => number
 }
 
