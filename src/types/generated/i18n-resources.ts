@@ -1424,6 +1424,7 @@ export interface TranslationResources {
         retry: string
         save: string
         showDetails: string
+        speedCheck: string
         tableView: string
         upgrade: string
       }

@@ -24,7 +24,8 @@
     "clear": "Очистить",
     "previous": "Назад",
     "next": "Далее",
-    "check": "Проверить"
+    "check": "Проверить",
+    "speedCheck": "Speed Test"
   },
   "labels": {
     "updateAt": "Обновлено в",

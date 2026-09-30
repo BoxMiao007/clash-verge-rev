@@ -24,7 +24,8 @@
     "clear": "Temizle",
     "previous": "Önceki",
     "next": "Sonraki",
-    "check": "Denetle"
+    "check": "Denetle",
+    "speedCheck": "Speed Test"
   },
   "labels": {
     "updateAt": "Güncelleme Zamanı",

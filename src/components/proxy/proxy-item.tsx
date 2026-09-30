@@ -14,12 +14,14 @@ import { useTranslation } from 'react-i18next'
 
 import { BaseLoading } from '@/components/base'
 import { useProxyDelayState } from '@/hooks/use-proxy-delay-state'
+import { useProxySpeedState } from '@/hooks/use-proxy-speed-state'
 import delayManager from '@/services/delay'
 import {
   memberDetails,
   type ProxyGroupView,
   type ResolvedProxyMember,
 } from '@/types/proxy-view'
+import { formatSpeed, formatSpeedColor } from '@/utils/speed'
 
 interface Props {
   group: ProxyGroupView
@@ -62,6 +64,9 @@ export const ProxyItem = (props: Props) => {
     member,
     group.name,
   )
+  // 速度: -2 测量中, -1 未测试, 0 失败, >0 字节/秒;与延迟并列展示
+  const { speedValue, onSpeed } = useProxySpeedState(member, group.name)
+  const showSpeed = speedValue >= 0
 
   return (
     <ListItem sx={sx}>
@@ -80,6 +85,10 @@ export const ProxyItem = (props: Props) => {
             return {
               '&:hover .the-check': { display: !showDelay ? 'block' : 'none' },
               '&:hover .the-delay': { display: showDelay ? 'block' : 'none' },
+              // 悬停出现速度测试按钮:仅未测试时;有结果/测量中展示对应内容
+              '&:hover .the-speed-check': {
+                display: speedValue === -1 ? 'block' : 'none',
+              },
               '&:hover .the-icon': { display: 'none' },
               '&.Mui-selected': {
                 width: `calc(100% + 3px)`,
@@ -177,6 +186,49 @@ export const ProxyItem = (props: Props) => {
               })}
             >
               {delayManager.formatDelay(delayValue, timeout)}
+            </Widget>
+          )}
+
+          {!unresolved && speedValue === -2 && (
+            // 速度测量中
+            <Widget>
+              <BaseLoading />
+            </Widget>
+          )}
+
+          {!unresolved && speedValue === -1 && (
+            // 悬停显示速度测试按钮
+            <Widget
+              className="the-speed-check"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                void onSpeed()
+              }}
+              sx={({ palette }) => ({
+                display: 'none', // hover 时显示
+                ':hover': { bgcolor: alpha(palette.primary.main, 0.15) },
+              })}
+            >
+              {t('shared.actions.speedCheck')}
+            </Widget>
+          )}
+
+          {!unresolved && showSpeed && (
+            // 显示下载速度(常驻,点击重测)
+            <Widget
+              className="the-speed"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                void onSpeed()
+              }}
+              sx={({ palette }) => ({
+                color: formatSpeedColor(speedValue),
+                ':hover': { bgcolor: alpha(palette.primary.main, 0.15) },
+              })}
+            >
+              {formatSpeed(speedValue)}
             </Widget>
           )}
 

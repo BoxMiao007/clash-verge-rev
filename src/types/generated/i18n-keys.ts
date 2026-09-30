@@ -843,6 +843,7 @@ export const translationKeys = [
   'shared.actions.previous',
   'shared.actions.next',
   'shared.actions.check',
+  'shared.actions.speedCheck',
   'shared.labels.updateAt',
   'shared.labels.timeout',
   'shared.labels.icon',

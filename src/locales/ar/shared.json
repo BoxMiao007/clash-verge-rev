@@ -24,7 +24,8 @@
     "clear": "مسح",
     "previous": "Previous",
     "next": "Next",
-    "check": "فحص"
+    "check": "فحص",
+    "speedCheck": "Speed Test"
   },
   "labels": {
     "updateAt": "التحديث عند",

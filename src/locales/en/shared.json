@@ -24,7 +24,8 @@
     "clear": "Clear",
     "previous": "Previous",
     "next": "Next",
-    "check": "Check"
+    "check": "Check",
+    "speedCheck": "Speed Test"
   },
   "labels": {
     "updateAt": "Update At",

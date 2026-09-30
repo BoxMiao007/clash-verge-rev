@@ -10,7 +10,7 @@ use crate::{
         tray,
         validate::CoreConfigValidator,
     },
-    enhance,
+    enhance, feat,
     process::AsyncHandler,
     utils::{dirs, help},
 };
@@ -235,6 +235,8 @@ impl Config {
         if let Some(port) = MixedPort::session_fallback() {
             config.insert(MIXED_PORT_KEY.into(), port.into());
         }
+        // 下载测速专用 listener(仅绑 127.0.0.1,proxy: GLOBAL);实现收在 feat::speedtest,此处只留最小调用点。
+        feat::inject_speedtest_listener(&mut config);
 
         Self::runtime().await.edit_draft(|d| {
             *d = IRuntime {

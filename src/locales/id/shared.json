@@ -24,7 +24,8 @@
     "clear": "Bersihkan",
     "previous": "Previous",
     "next": "Next",
-    "check": "Periksa"
+    "check": "Periksa",
+    "speedCheck": "Speed Test"
   },
   "labels": {
     "updateAt": "Diperbarui Pada",

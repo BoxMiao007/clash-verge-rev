@@ -24,7 +24,8 @@
     "clear": "지우기",
     "previous": "Previous",
     "next": "Next",
-    "check": "검사"
+    "check": "검사",
+    "speedCheck": "Speed Test"
   },
   "labels": {
     "updateAt": "업데이트 시간",
