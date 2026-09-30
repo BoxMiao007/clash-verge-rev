@@ -40,10 +40,6 @@ jobs:
       - name: Download sidecar (mihomo)
         run: pnpm run prebuild x86_64-pc-windows-msvc
 
-      # 仓库是 workspace 布局,target 目录在仓库根;缓存命中后可跳过全量重编译
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-
       - name: Build NSIS x64 (verge-dev variant)
         env:
           NODE_OPTIONS: '--max_old_space_size=4096'
@@ -58,5 +54,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: clash-verge-win-x64-test
-          path: target/release/bundle/nsis/*.exe
+          path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
