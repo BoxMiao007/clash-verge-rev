@@ -163,7 +163,15 @@ export const ProxyItemMini = (props: Props) => {
         )}
       </Box>
       <Box
-        sx={{ ml: 0.5, color: 'primary.main', display: isPreset ? 'none' : '' }}
+        // 纵向 flex 且右贴齐:延迟/速度/加载点各状态子项右缘对齐,
+        // 块级布局时短文本(延迟值)会左缩、与速度值右缘错开。
+        sx={{
+          ml: 0.5,
+          color: 'primary.main',
+          display: isPreset ? 'none' : 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+        }}
       >
         {!unresolved && delayValue === -2 && (
           <Widget>
