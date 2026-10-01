@@ -40,6 +40,15 @@
 - 测试包为 `.dev` 身份,数据目录/单实例/系统服务均与官方安装版隔离,可并存;首次启动需重新导入订阅。
 - CI 签名密钥在 fork secrets(`TAURI_PRIVATE_KEY`/`TAURI_KEY_PASSWORD`),一次性密钥,仅为满足 `createUpdaterArtifacts` 的构建签名要求,与官方更新链无关;丢失则 `pnpm tauri signer generate` 重新生成后 `gh secret set`。
 
+## 正式版发布(Windows x64)
+
+fork 正式版用 dev 上的 `fork-release.yml` 工作流发布:官方 identity、仅 Windows x64,tag 推送 `v*-fork.*` 自动触发。
+
+- tag 命名 `v<上游基线>-fork.<序号>`(如 `v2.5.7-fork.1`),在 dev 上打并推送;CI 内把应用版本盖成 build metadata 形式的 `2.5.7+fork.1`(`release-version.mjs` 只接受这种 fork 后缀),不污染 dev 版本号。
+- 工作流文件必须存在于被发布 tag 的提交里:先合入 dev 再打 tag。
+- 重发同一 tag:`gh workflow run fork-release.yml --repo BoxMiao007/clash-verge-rev -f tag=v2.5.7-fork.1`。
+- 与官方版数据兼容(同 identity,覆盖安装不迁移数据);应用内更新已禁用(ADR-0002),升级 = 下载新安装包覆盖安装,「检查更新」按钮报错属预期。
+
 ## 功能清单
 
 本 fork 相对上游的自有功能登记处:新功能合入 `dev` 时必须登记一行,功能下线时移除。agent 会话以此了解本 fork 有哪些功能;设计背景见 `.scratch/<feature>/` 的 spec,代码演变见 git 历史(`git log upstream/dev..dev --no-merges`)。
