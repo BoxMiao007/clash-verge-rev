@@ -135,27 +135,29 @@ export const MAX_SPEEDTEST_MAX_MB = 1024
 
 const BYTES_PER_MB = 1024 * 1024
 
+/** 两解析函数共用的合法性判断:未配置、非整数或低于下限即非法;
+ *  越上界的语义两函数不同(MB 夹到上界、字节不限),由各自函数处理。 */
+const isValidMaxMb = (configured?: number | null): configured is number =>
+  configured != null &&
+  Number.isInteger(configured) &&
+  configured >= MIN_SPEEDTEST_MAX_MB
+
 /** 解析测速流量上限为展示/保存值(MB):未配置、负数、非整数归 0(不限),
  *  越界夹到上界。设置条目的展示与输入即时归一共用;与时长不同,0 是合法输入。 */
 export const resolveSpeedtestMaxMb = (configured?: number | null): number => {
-  if (configured == null || !Number.isInteger(configured) || configured <= 0) {
+  if (!isValidMaxMb(configured)) {
     return 0
   }
   return Math.min(MAX_SPEEDTEST_MAX_MB, configured)
 }
 
-/** 解析测速流量上限(MB 配置)为后端字节上限:0/未配置/非法(负数、非整数、越界)
- *  一律不限(返回 undefined,不传参数),合法值由 MB 换算为字节。
+/** 解析测速流量上限(MB 配置)为按字节传入后端的参数:0/未配置/非法(负数、
+ *  非整数、越界)一律不限(返回 undefined,不传参数),合法值由 MB 换算为字节。
  *  语义与后端 normalize_max_bytes 一致:非法输入自动归一,坏配置不悄悄生效。 */
 export const resolveSpeedtestMaxBytes = (
   configured?: number | null,
 ): number | undefined => {
-  if (
-    configured == null ||
-    !Number.isInteger(configured) ||
-    configured < MIN_SPEEDTEST_MAX_MB ||
-    configured > MAX_SPEEDTEST_MAX_MB
-  ) {
+  if (!isValidMaxMb(configured) || configured > MAX_SPEEDTEST_MAX_MB) {
     return undefined
   }
   return configured * BYTES_PER_MB

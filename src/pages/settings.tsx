@@ -112,7 +112,7 @@ const SettingPage = () => {
               backgroundColor: isDark ? '#282a36' : '#ffffff',
             }}
           >
-            <SettingVergeSpeedtest />
+            <SettingVergeSpeedtest onError={onError} />
           </Box>
           <Box
             sx={{

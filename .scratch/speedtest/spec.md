@@ -80,3 +80,4 @@ Status: ready-for-agent
 ## Comments
 
 - 2026-09-30:五张工单全部完成后,按流程对 dev...feat/speedtest 做了两轴代码审查。修复提交 `c859e584`:①恢复竞态——测速命令返回前同步 await GLOBAL 恢复(此前 Drop 守卫异步恢复不等待,串行下下一节点 PUT 可能抢跑),Drop 仅作 panic 兜底,新增 3 个时序回归测试;②补齐超时态(编码 -3,与失败 0 区分),测量状态五态对齐 spec 故事 18;③删除 spec 外的 get_speedtest_listener_port;④时长上下限收敛到 utils/speed.ts 单一来源;⑤speed.ts 内部去重;⑥注释精简。审查中判定为「仓库既有模式、保持一致优于抽象」未修:hook 骨架相似、handleCheckAll 同构、item/mini 双份 Widget、组件内数字直比。
+- 2026-10-01:本文「设置项」仅 URL/时长两项与 Out of Scope 中「字节上限不作为设置项」已被 `.scratch/speedtest-settings-card/spec.md` 推翻:速度测试挪入设置页独立卡片并新增测速流量上限(0 不限,1–1024 MB),以新 spec 为准。
