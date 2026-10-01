@@ -179,6 +179,17 @@
           "hotkeySetting": "快速鍵設定"
         }
       },
+      "speedtest": {
+        "title": "速度測試",
+        "fields": {
+          "speedtestUrl": "速度測試連結",
+          "speedtestDuration": "速度測試時長"
+        },
+        "tooltips": {
+          "speedtestUrl": "速度測試下載的測試檔案網址，留空時使用內建預設值",
+          "speedtestDuration": "單次速度測試的下載時長，範圍 1-30 秒"
+        }
+      },
       "advanced": {
         "title": "Verge 進階設定",
         "tooltips": {
@@ -415,17 +426,13 @@
         "autoDelayDetection": "自動延遲偵測",
         "autoDelayDetectionInterval": "自動延遲偵測間隔",
         "defaultLatencyTest": "預設測試網址",
-        "defaultLatencyTimeout": "測試逾時",
-        "defaultSpeedtestUrl": "速度測試連結",
-        "defaultSpeedtestDuration": "速度測試時長"
+        "defaultLatencyTimeout": "測試逾時"
       },
       "tooltips": {
         "autoCloseConnections": "當代理組選中節點或代理模式變動時，關閉已建立的連線",
         "enableBuiltinEnhanced": "配置檔案的相容性處理",
         "autoDelayDetection": "在背景定時偵測目前節點延遲",
-        "defaultLatencyTest": "僅用於 HTTP 客戶端請求測試，不會對配置檔案產生影響",
-        "defaultSpeedtestUrl": "速度測試下載的測試檔案網址，留空時使用內建預設值",
-        "defaultSpeedtestDuration": "單次速度測試的下載時長，範圍 1-30 秒"
+        "defaultLatencyTest": "僅用於 HTTP 客戶端請求測試，不會對配置檔案產生影響"
       },
       "options": {
         "proxyLayoutColumns": {
