@@ -51,7 +51,7 @@ pub fn calc_speed_bps(bytes: u64, elapsed: Duration) -> u64 {
         return 0;
     }
     let millis = elapsed.as_millis().max(1);
-    ((bytes as u128 * 1000) / millis as u128) as u64
+    ((bytes as u128 * 1000) / millis) as u64
 }
 
 /// 构造专用 listener 的 mihomo 配置条目。
@@ -169,8 +169,7 @@ pub fn inject_speedtest_listener(config: &mut Mapping) {
             listeners.push(Value::Mapping(entry));
         }
     } else {
-        let mut listeners = Vec::new();
-        listeners.push(Value::Mapping(entry));
+        let listeners = vec![Value::Mapping(entry)];
         config.insert("listeners".into(), Value::Sequence(listeners));
     }
 
@@ -195,21 +194,17 @@ trait GlobalProxyOps: Send + Sync + 'static {
 struct MihomoGlobalOps;
 
 impl GlobalProxyOps for MihomoGlobalOps {
-    fn global_now(&self) -> impl Future<Output = Result<Option<String>>> + Send {
-        async {
-            Ok(Handle::mihomo()
-                .get_proxy_by_name("GLOBAL")
-                .await
-                .map(|global| global.now)?)
-        }
+    async fn global_now(&self) -> Result<Option<String>> {
+        Ok(Handle::mihomo()
+            .get_proxy_by_name("GLOBAL")
+            .await
+            .map(|global| global.now)?)
     }
 
-    fn select_global(&self, node: &str) -> impl Future<Output = Result<()>> + Send {
+    async fn select_global(&self, node: &str) -> Result<()> {
         // 插件错误经 ? 归一到 anyhow::Error,与 trait 签名一致。
-        async move {
-            Handle::mihomo().select_node_for_group("GLOBAL", node).await?;
-            Ok(())
-        }
+        Handle::mihomo().select_node_for_group("GLOBAL", node).await?;
+        Ok(())
     }
 }
 
@@ -386,6 +381,7 @@ mod tests {
     /// IPC 契约:前端 src/services/speed.ts 读驼峰键 speedBps(Tauri 不改写
     /// 命令返回值的字段名),漏标 rename_all 会静默变成 undefined 而非报错。
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn ipc_payload_uses_camel_case_keys_expected_by_frontend() {
         let value = serde_json::to_value(SpeedTestResult {
             bytes: 1,
@@ -421,6 +417,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn injection_creates_loopback_global_listener_once() {
         let mut config = Mapping::new();
         inject_speedtest_listener(&mut config);
@@ -443,6 +440,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn injection_keeps_user_listeners_and_avoids_occupied_ports() {
         let mut config = Mapping::new();
         let user_port = SPEEDTEST_BASE_PORT;
@@ -465,6 +463,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn injected_port_is_readable() {
         let mut config = Mapping::new();
         assert_eq!(speedtest_listener_port(&config), None);
@@ -493,10 +492,11 @@ mod tests {
     }
 
     impl GlobalProxyOps for FakeGlobalOps {
-        fn global_now(&self) -> impl Future<Output = Result<Option<String>>> + Send {
-            async { Ok(self.now.clone()) }
+        async fn global_now(&self) -> Result<Option<String>> {
+            Ok(self.now.clone())
         }
 
+        #[allow(clippy::unwrap_used)]
         fn select_global(&self, node: &str) -> impl Future<Output = Result<()>> + Send {
             let node = node.to_string();
             async move {
@@ -513,13 +513,14 @@ mod tests {
             FakeGlobalOps {
                 now: Some(now.into()),
                 select_delay,
-                calls: calls.clone(),
+                calls: std::sync::Arc::clone(&calls),
             },
             calls,
         )
     }
 
     #[tokio::test]
+    #[allow(clippy::unwrap_used)]
     async fn command_returns_only_after_slow_global_restore_completes() {
         // 每次 select 耗时 50ms:若恢复仍是派发不等待的后台任务(旧实现),
         // 命令返回时恢复尚未执行,序列会缺少最后一步,本测试即失败。
@@ -536,6 +537,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::unwrap_used)]
     async fn restore_completes_even_when_download_fails() {
         let (ops, calls) = fake_ops("origin", Duration::from_millis(50));
 
@@ -550,6 +552,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::unwrap_used)]
     async fn no_switch_and_no_restore_when_global_already_on_node() {
         let (ops, calls) = fake_ops("node-a", Duration::from_millis(50));
 
