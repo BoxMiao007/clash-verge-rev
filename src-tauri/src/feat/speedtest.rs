@@ -2,22 +2,25 @@
 //!
 //! 机制见 docs/adr/0001-download-speedtest-via-global-listener.md:配置生成时注入
 //! 一个仅绑定 127.0.0.1 的专用 mixed listener(`proxy: GLOBAL`,已由 01 号工单 spike
-//! 实测验证);测速命令按「读取 GLOBAL 当前选择 → PUT 切到被测节点 → 从专用端口
-//! 发起限时下载 → 返回前同步恢复 GLOBAL」执行。不触碰用户分组的选择,不写
-//! record_selected_node。
+//! 实测验证);测速命令按「读取 GLOBAL 当前选择 → 写恢复日志 → PUT 切到被测节点 →
+//! 从专用端口发起限时下载 → 返回前同步恢复 GLOBAL 并清日志」执行。不触碰用户分组的
+//! 选择,不写 record_selected_node。进程被硬杀(kill -9/断电)导致的残留由内核启动
+//! 检查兜底(`recover_pending_restore`),处置语义见 ADR 修订节。
 //!
 //! 已知取舍(ADR-0001):global 模式用户在测速窗口内流量会被波及;恢复 GLOBAL
 //! 失败只记日志,不向用户报错(mihomo 会把 GLOBAL 选择持久化到 cache.db,因此
 //! 超时/panic 路径也必须尝试恢复)。
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context as _, Result, anyhow, bail};
 use clash_verge_logging::{Type, logging};
 use serde_yaml_ng::{Mapping, Value};
 use std::future::Future;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::config::Config;
 use crate::core::handle::Handle;
+use crate::utils::dirs::app_home_dir;
 
 /// 专用 listener 在 mihomo 配置 `listeners` 中的唯一标记名。
 pub const SPEEDTEST_LISTENER_NAME: &str = "verge-speedtest";
@@ -182,6 +185,85 @@ fn remove_speedtest_listener(config: &mut Mapping) {
     }
 }
 
+/// GLOBAL 恢复日志(崩溃安全):切换前把「原选择 → 被测节点」落盘,恢复成功后删除。
+/// 进程被硬杀(kill -9/断电)时 Drop 守卫不会执行,而 mihomo 会把 GLOBAL 选择
+/// 持久化到 cache.db,残留会跨会话存活;内核启动时按此日志把 GLOBAL 恢复原选择。
+const RESTORE_JOURNAL_FILE: &str = "speedtest-global-restore.json";
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct GlobalRestoreJournal {
+    /// 切换前 GLOBAL 的原选择,即恢复目标。
+    original: String,
+    /// 本次测速切换到的节点(被测节点)。
+    target: String,
+}
+
+fn restore_journal_path(dir: &Path) -> PathBuf {
+    dir.join(RESTORE_JOURNAL_FILE)
+}
+
+/// 日志不存在或损坏时返回 None;损坏不删除,留待下次测速覆盖写入。
+fn read_journal_file(dir: &Path) -> Option<GlobalRestoreJournal> {
+    let text = std::fs::read_to_string(restore_journal_path(dir)).ok()?;
+    match serde_json::from_str(&text) {
+        Ok(journal) => Some(journal),
+        Err(err) => {
+            logging!(warn, Type::Core, "下载测速:恢复日志损坏,忽略: {err}");
+            None
+        }
+    }
+}
+
+fn write_journal_file(dir: &Path, journal: &GlobalRestoreJournal) -> Result<()> {
+    use std::io::Write as _;
+    let path = restore_journal_path(dir);
+    let tmp = restore_journal_path(dir).with_extension("tmp");
+    let text = serde_json::to_string(journal).context("序列化恢复日志失败")?;
+    // 临时文件 + sync_all + 同目录改名:断电时不至于读到半写的日志——cache.db 侧的
+    // 残留可能已持久化,半写的日志救不回残留。目录项改名本身不做 fsync:跨平台成本
+    // 高,极端断电窗口退化为「无日志」,与修复前行为一致。
+    let mut file =
+        std::fs::File::create(&tmp).with_context(|| format!("创建恢复日志临时文件失败: {}", tmp.display()))?;
+    file.write_all(text.as_bytes())
+        .with_context(|| format!("写入恢复日志失败: {}", tmp.display()))?;
+    file.sync_all()
+        .with_context(|| format!("刷盘恢复日志失败: {}", tmp.display()))?;
+    drop(file);
+    std::fs::rename(&tmp, &path).with_context(|| format!("落盘恢复日志失败: {}", path.display()))
+}
+
+fn clear_journal_file(dir: &Path) {
+    // 主文件与写一半时崩溃遗留的临时文件一并清理,二者不存在均视为已清理。
+    for path in [
+        restore_journal_path(dir),
+        restore_journal_path(dir).with_extension("tmp"),
+    ] {
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => logging!(warn, Type::Core, "下载测速:清除恢复日志失败: {err}"),
+        }
+    }
+}
+
+/// 内核启动时对恢复日志的处置决策(调用方保证日志存在且 GLOBAL 已可读;纯函数便于测试)。
+#[derive(Debug, PartialEq, Eq)]
+enum RestoreDecision {
+    /// GLOBAL 已不在被测节点(用户已手动切换或残留被覆盖):仅清理日志不恢复,
+    /// 避免覆盖用户的最新选择。
+    ClearOnly,
+    /// GLOBAL 仍停在被测节点:恢复到原选择。
+    Restore(String),
+}
+
+fn decide_startup_restore(journal: &GlobalRestoreJournal, global_now: &str) -> RestoreDecision {
+    if global_now == journal.target {
+        RestoreDecision::Restore(journal.original.clone())
+    } else {
+        RestoreDecision::ClearOnly
+    }
+}
+
 /// GLOBAL 选择读写的最小接缝:生产实现走 mihomo 插件客户端,测试注入假实现。
 ///
 /// 方法显式返回 `impl Future + Send`:tauri 命令的 future 必须可跨线程轮询。
@@ -210,10 +292,14 @@ impl GlobalProxyOps for MihomoGlobalOps {
 
 /// 恢复 GLOBAL 选择:命令返回前的同步恢复与守卫 Drop 的兜底恢复共用此函数。
 /// 失败只记日志,不向用户报错(mihomo 会把 GLOBAL 选择持久化到 cache.db,
-/// panic/取消路径也必须尽力尝试还原)。
-async fn restore_global_selection<O: GlobalProxyOps>(ops: &O, node: &str) {
+/// panic/取消路径也必须尽力尝试还原);恢复成功才清除恢复日志,失败保留,
+/// 交给内核启动时的恢复检查兜底。
+async fn restore_global_selection<O: GlobalProxyOps>(ops: &O, node: &str, journal_dir: &Path) {
     match ops.select_global(node).await {
-        Ok(()) => logging!(debug, Type::Core, "下载测速:已恢复 GLOBAL 选择: {node}"),
+        Ok(()) => {
+            clear_journal_file(journal_dir);
+            logging!(debug, Type::Core, "下载测速:已恢复 GLOBAL 选择: {node}");
+        }
         Err(err) => logging!(warn, Type::Core, "下载测速:恢复 GLOBAL 选择失败(仅记录): {err:#}"),
     }
 }
@@ -224,6 +310,7 @@ async fn restore_global_selection<O: GlobalProxyOps>(ops: &O, node: &str) {
 struct GlobalSelectionGuard<O: GlobalProxyOps> {
     ops: Option<O>,
     node: String,
+    journal_dir: PathBuf,
     settled: bool,
 }
 
@@ -231,7 +318,7 @@ impl<O: GlobalProxyOps> GlobalSelectionGuard<O> {
     /// 正常路径:同步等待恢复完成后置位,Drop 不再重复派发。
     async fn restore(mut self) {
         if let Some(ops) = self.ops.as_ref() {
-            restore_global_selection(ops, &self.node).await;
+            restore_global_selection(ops, &self.node, &self.journal_dir).await;
         }
         self.settled = true;
     }
@@ -247,7 +334,8 @@ impl<O: GlobalProxyOps> Drop for GlobalSelectionGuard<O> {
             return;
         };
         let node = self.node.clone();
-        tokio::spawn(async move { restore_global_selection(&ops, &node).await });
+        let journal_dir = self.journal_dir.clone();
+        tokio::spawn(async move { restore_global_selection(&ops, &node, &journal_dir).await });
     }
 }
 
@@ -259,6 +347,7 @@ impl<O: GlobalProxyOps> Drop for GlobalSelectionGuard<O> {
 async fn speedtest_via_global<O: GlobalProxyOps>(
     ops: O,
     node: &str,
+    journal_dir: &Path,
     download: impl Future<Output = Result<(u64, Duration)>> + Send,
 ) -> Result<(u64, Duration)> {
     let Some(original) = ops.global_now().await? else {
@@ -269,10 +358,24 @@ async fn speedtest_via_global<O: GlobalProxyOps>(
     let guard = if original == node {
         None
     } else {
-        ops.select_global(node).await?;
+        // 先落盘恢复日志再切换,切换成功后任何时刻崩溃都能据此恢复原选择;
+        // 写入失败则放弃本次测速(fail-fast),不做无保护的切换。
+        write_journal_file(
+            journal_dir,
+            &GlobalRestoreJournal {
+                original: original.clone(),
+                target: node.into(),
+            },
+        )?;
+        if let Err(err) = ops.select_global(node).await {
+            // 未切成功即无残留;立即清理,避免留下指向未发生切换的记录。
+            clear_journal_file(journal_dir);
+            return Err(err);
+        }
         Some(GlobalSelectionGuard {
             ops: Some(ops),
             node: original,
+            journal_dir: journal_dir.to_path_buf(),
             settled: false,
         })
     };
@@ -357,7 +460,14 @@ pub async fn speedtest_node(name: String, url: String, duration_secs: u64) -> Re
 
     // 客户端构建在切换 GLOBAL 之前:失败时无需触发恢复。
     let client = build_download_client(port)?;
-    let (bytes, elapsed) = speedtest_via_global(MihomoGlobalOps, &name, timed_download(&client, &url, window)).await?;
+    let journal_dir = app_home_dir().context("无法定位应用数据目录,恢复日志无法落盘")?;
+    let (bytes, elapsed) = speedtest_via_global(
+        MihomoGlobalOps,
+        &name,
+        &journal_dir,
+        timed_download(&client, &url, window),
+    )
+    .await?;
 
     if bytes == 0 {
         bail!(
@@ -372,6 +482,69 @@ pub async fn speedtest_node(name: String, url: String, duration_secs: u64) -> Re
         elapsed_ms: elapsed.as_millis() as u64,
         speed_bps: calc_speed_bps(bytes, elapsed),
     })
+}
+
+/// 内核启动后的恢复检查:按恢复日志把崩溃残留的 GLOBAL 选择还原。
+///
+/// 处置语义见 [`decide_startup_restore`]:无日志零开销;残留已被覆盖仅清理;
+/// 确需恢复时失败也放弃(节点可能已随订阅更新消失,不猜测用户意图)。
+/// GLOBAL 读取失败时保留日志,留待下一次内核启动重试。
+pub(crate) async fn recover_pending_restore() {
+    let Ok(dir) = app_home_dir() else {
+        logging!(warn, Type::Core, "下载测速:无法定位应用数据目录,跳过 GLOBAL 恢复检查");
+        return;
+    };
+    recover_pending_restore_with(&MihomoGlobalOps, &dir).await;
+}
+
+async fn recover_pending_restore_with<O: GlobalProxyOps>(ops: &O, dir: &Path) {
+    let Some(journal) = read_journal_file(dir) else {
+        return;
+    };
+    let now = match ops.global_now().await {
+        Ok(Some(now)) => now,
+        other => {
+            // GLOBAL 恒有当前选择,Ok(None) 与 Err 同属读取异常而非「已被用户覆盖」:
+            // 保留日志,留待下一次内核启动重试。
+            if let Err(err) = other {
+                logging!(
+                    warn,
+                    Type::Core,
+                    "下载测速:读取 GLOBAL 失败,保留恢复日志待下次启动重试: {err:#}"
+                );
+            } else {
+                logging!(
+                    warn,
+                    Type::Core,
+                    "下载测速:读取 GLOBAL 异常(无当前选择),保留恢复日志待下次启动重试"
+                );
+            }
+            return;
+        }
+    };
+    match decide_startup_restore(&journal, &now) {
+        RestoreDecision::ClearOnly => {
+            clear_journal_file(dir);
+            logging!(debug, Type::Core, "下载测速:GLOBAL 残留已被覆盖,仅清理恢复日志");
+        }
+        RestoreDecision::Restore(original) => {
+            match ops.select_global(&original).await {
+                Ok(()) => {
+                    clear_journal_file(dir);
+                    logging!(info, Type::Core, "下载测速:已按恢复日志还原 GLOBAL 选择: {original}");
+                }
+                Err(err) => {
+                    // 节点可能已随订阅更新消失;放弃恢复,残留可被下次测速或手动切换覆盖。
+                    clear_journal_file(dir);
+                    logging!(
+                        warn,
+                        Type::Core,
+                        "下载测速:恢复 GLOBAL 失败,放弃并清理恢复日志: {err:#}"
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -483,16 +656,39 @@ mod tests {
         assert_eq!(speedtest_listener_port(&config), None);
     }
 
-    /// 假 GLOBAL 操作:记录 select 调用序列,可对每次 select 注入延迟,
-    /// 用于验证恢复与命令返回的先后关系。
+    fn temp_test_dir(tag: &str) -> PathBuf {
+        #[allow(clippy::unwrap_used)]
+        {
+            let dir = std::env::temp_dir().join(format!(
+                "speedtest-journal-{}-{}-{tag}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+            ));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            dir
+        }
+    }
+
+    /// 假 GLOBAL 操作:记录 select 调用序列,可注入延迟、global_now 失败
+    /// 与从第 N 次起的 select 失败,用于验证恢复时序、恢复日志的写入/清理
+    /// 与启动恢复的处置语义。
     struct FakeGlobalOps {
         now: Option<String>,
+        fail_now: bool,
         select_delay: Duration,
+        fail_select_from: Option<usize>,
         calls: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     }
 
     impl GlobalProxyOps for FakeGlobalOps {
         async fn global_now(&self) -> Result<Option<String>> {
+            if self.fail_now {
+                return Err(anyhow!("注入的 global_now 失败"));
+            }
             Ok(self.now.clone())
         }
 
@@ -501,22 +697,270 @@ mod tests {
             let node = node.to_string();
             async move {
                 tokio::time::sleep(self.select_delay).await;
-                self.calls.lock().unwrap().push(node);
-                Ok(())
+                // 作用域收窄锁守卫:不跨语句持有,亦满足 significant_drop 收紧要求。
+                let switched = {
+                    let mut calls = self.calls.lock().unwrap();
+                    if self.fail_select_from.is_some_and(|from| calls.len() >= from) {
+                        false
+                    } else {
+                        calls.push(node);
+                        true
+                    }
+                };
+                if switched {
+                    Ok(())
+                } else {
+                    Err(anyhow!("注入的 select 失败"))
+                }
             }
         }
     }
 
     fn fake_ops(now: &str, select_delay: Duration) -> (FakeGlobalOps, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        fake_ops_full(now, select_delay, false, None)
+    }
+
+    fn fake_ops_full(
+        now: &str,
+        select_delay: Duration,
+        fail_now: bool,
+        fail_select_from: Option<usize>,
+    ) -> (FakeGlobalOps, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
         let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         (
             FakeGlobalOps {
                 now: Some(now.into()),
+                fail_now,
                 select_delay,
+                fail_select_from,
                 calls: std::sync::Arc::clone(&calls),
             },
             calls,
         )
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn journal_file_roundtrip_and_clear() {
+        let dir = temp_test_dir("roundtrip");
+        assert!(read_journal_file(&dir).is_none(), "无日志文件按不存在处理");
+
+        let journal = GlobalRestoreJournal {
+            original: "a".into(),
+            target: "b".into(),
+        };
+        write_journal_file(&dir, &journal).unwrap();
+        assert_eq!(read_journal_file(&dir), Some(journal));
+
+        clear_journal_file(&dir);
+        assert!(read_journal_file(&dir).is_none());
+        // 重复清除幂等。
+        clear_journal_file(&dir);
+
+        // 损坏内容按不存在处理,不阻塞后续写入。
+        std::fs::write(restore_journal_path(&dir), "not json").unwrap();
+        assert!(read_journal_file(&dir).is_none());
+    }
+
+    #[test]
+    fn decide_startup_restore_distinguishes_residue_and_overwrite() {
+        let journal = GlobalRestoreJournal {
+            original: "a".into(),
+            target: "b".into(),
+        };
+
+        assert_eq!(
+            decide_startup_restore(&journal, "b"),
+            RestoreDecision::Restore("a".into()),
+            "GLOBAL 仍停在被测节点:恢复原选择"
+        );
+        assert_eq!(
+            decide_startup_restore(&journal, "c"),
+            RestoreDecision::ClearOnly,
+            "残留已被覆盖:仅清理,不覆盖用户最新选择"
+        );
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn command_writes_journal_before_switch_and_clears_after_restore() {
+        let (ops, calls) = fake_ops("origin", Duration::ZERO);
+        let dir = temp_test_dir("wal");
+        let mid = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let mid_in_task = std::sync::Arc::clone(&mid);
+        let dir_for_task = dir.clone();
+
+        let result = speedtest_via_global(ops, "node-a", &dir, async move {
+            *mid_in_task.lock().unwrap() = read_journal_file(&dir_for_task);
+            Ok((1000u64, Duration::from_millis(1)))
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(
+            mid.lock().unwrap().as_ref(),
+            Some(&GlobalRestoreJournal {
+                original: "origin".into(),
+                target: "node-a".into()
+            }),
+            "切换与下载期间恢复日志必须在盘上(先写后切)"
+        );
+        assert!(read_journal_file(&dir).is_none(), "恢复完成后日志必须清除");
+        assert_eq!(*calls.lock().unwrap(), vec!["node-a".to_string(), "origin".to_string()]);
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn restore_failure_keeps_journal_for_startup_recovery() {
+        // 第 1 次 select(切换)成功,第 2 次(恢复)失败:命令照常返回,
+        // 日志保留,交给内核启动时的恢复检查兜底。
+        let (ops, calls) = fake_ops_full("origin", Duration::ZERO, false, Some(1));
+        let dir = temp_test_dir("restore-fail");
+
+        let result = speedtest_via_global(ops, "node-a", &dir, async { Ok((1000u64, Duration::from_millis(1))) }).await;
+
+        assert!(result.is_ok(), "恢复失败不改变命令结果(与既有语义一致)");
+        assert_eq!(*calls.lock().unwrap(), vec!["node-a".to_string()]);
+        assert_eq!(
+            read_journal_file(&dir),
+            Some(GlobalRestoreJournal {
+                original: "origin".into(),
+                target: "node-a".into()
+            }),
+            "恢复失败时日志必须保留"
+        );
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn switch_failure_clears_journal() {
+        let (ops, _calls) = fake_ops_full("origin", Duration::ZERO, false, Some(0));
+        let dir = temp_test_dir("switch-fail");
+
+        let result = speedtest_via_global(ops, "node-a", &dir, async { Ok((1000u64, Duration::from_millis(1))) }).await;
+
+        assert!(result.is_err());
+        assert!(read_journal_file(&dir).is_none(), "未切成功即无残留,日志应立即清理");
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn recovery_restores_residue_and_clears_journal() {
+        let (ops, calls) = fake_ops("node-b", Duration::ZERO);
+        let dir = temp_test_dir("recover");
+        write_journal_file(
+            &dir,
+            &GlobalRestoreJournal {
+                original: "node-a".into(),
+                target: "node-b".into(),
+            },
+        )
+        .unwrap();
+
+        recover_pending_restore_with(&ops, &dir).await;
+
+        assert_eq!(*calls.lock().unwrap(), vec!["node-a".to_string()], "必须恢复到原选择");
+        assert!(read_journal_file(&dir).is_none());
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn recovery_clears_only_when_residue_already_overwritten() {
+        // 用户崩溃后已手动切到 node-c:不能再恢复,仅清理日志。
+        let (ops, calls) = fake_ops("node-c", Duration::ZERO);
+        let dir = temp_test_dir("covered");
+        write_journal_file(
+            &dir,
+            &GlobalRestoreJournal {
+                original: "node-a".into(),
+                target: "node-b".into(),
+            },
+        )
+        .unwrap();
+
+        recover_pending_restore_with(&ops, &dir).await;
+
+        assert!(calls.lock().unwrap().is_empty(), "不得触碰用户的最新选择");
+        assert!(read_journal_file(&dir).is_none());
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn recovery_gives_up_and_clears_when_restore_fails() {
+        // 原选择节点已失效:恢复失败后放弃(不反复重试)并清理日志。
+        let (ops, _calls) = fake_ops_full("node-b", Duration::ZERO, false, Some(0));
+        let dir = temp_test_dir("give-up");
+        write_journal_file(
+            &dir,
+            &GlobalRestoreJournal {
+                original: "node-a".into(),
+                target: "node-b".into(),
+            },
+        )
+        .unwrap();
+
+        recover_pending_restore_with(&ops, &dir).await;
+
+        assert!(read_journal_file(&dir).is_none(), "失败也必须清理日志");
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn recovery_keeps_journal_when_global_unreadable() {
+        // 内核未就绪读取 GLOBAL 失败:保留日志,下次内核启动重试。
+        let (ops, _calls) = fake_ops_full("node-b", Duration::ZERO, true, None);
+        let dir = temp_test_dir("unreadable");
+        write_journal_file(
+            &dir,
+            &GlobalRestoreJournal {
+                original: "node-a".into(),
+                target: "node-b".into(),
+            },
+        )
+        .unwrap();
+
+        recover_pending_restore_with(&ops, &dir).await;
+
+        assert!(read_journal_file(&dir).is_some(), "读不到 GLOBAL 时保留日志待下次重试");
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn recovery_keeps_journal_when_now_missing() {
+        // GLOBAL 可读但没有当前选择:同为读取异常,不得按「已被覆盖」清理。
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let ops = FakeGlobalOps {
+            now: None,
+            fail_now: false,
+            select_delay: Duration::ZERO,
+            fail_select_from: None,
+            calls: std::sync::Arc::clone(&calls),
+        };
+        let dir = temp_test_dir("now-missing");
+        write_journal_file(
+            &dir,
+            &GlobalRestoreJournal {
+                original: "node-a".into(),
+                target: "node-b".into(),
+            },
+        )
+        .unwrap();
+
+        recover_pending_restore_with(&ops, &dir).await;
+
+        assert!(calls.lock().unwrap().is_empty(), "不得凭异常状态触发恢复");
+        assert!(read_journal_file(&dir).is_some(), "读取异常时保留日志待下次重试");
+    }
+
+    #[tokio::test]
+    #[allow(clippy::unwrap_used)]
+    async fn recovery_is_idle_without_journal() {
+        let (ops, calls) = fake_ops("node-b", Duration::ZERO);
+        let dir = temp_test_dir("idle");
+
+        recover_pending_restore_with(&ops, &dir).await;
+
+        assert!(calls.lock().unwrap().is_empty(), "无日志时零开销,不触碰 mihomo");
     }
 
     #[tokio::test]
@@ -525,8 +969,9 @@ mod tests {
         // 每次 select 耗时 50ms:若恢复仍是派发不等待的后台任务(旧实现),
         // 命令返回时恢复尚未执行,序列会缺少最后一步,本测试即失败。
         let (ops, calls) = fake_ops("origin", Duration::from_millis(50));
+        let dir = temp_test_dir("order");
 
-        let result = speedtest_via_global(ops, "node-a", async { Ok((1000u64, Duration::from_millis(1))) }).await;
+        let result = speedtest_via_global(ops, "node-a", &dir, async { Ok((1000u64, Duration::from_millis(1))) }).await;
 
         assert!(result.is_ok());
         assert_eq!(
@@ -534,14 +979,16 @@ mod tests {
             vec!["node-a".to_string(), "origin".to_string()],
             "命令返回时 GLOBAL 必须已同步恢复到原选择"
         );
+        assert!(read_journal_file(&dir).is_none(), "命令收尾后恢复日志必须已清除");
     }
 
     #[tokio::test]
     #[allow(clippy::unwrap_used)]
     async fn restore_completes_even_when_download_fails() {
         let (ops, calls) = fake_ops("origin", Duration::from_millis(50));
+        let dir = temp_test_dir("download-fail");
 
-        let result = speedtest_via_global(ops, "node-a", async { Err(anyhow!("下载失败")) }).await;
+        let result = speedtest_via_global(ops, "node-a", &dir, async { Err(anyhow!("下载失败")) }).await;
 
         assert!(result.is_err());
         assert_eq!(
@@ -555,10 +1002,175 @@ mod tests {
     #[allow(clippy::unwrap_used)]
     async fn no_switch_and_no_restore_when_global_already_on_node() {
         let (ops, calls) = fake_ops("node-a", Duration::from_millis(50));
+        let dir = temp_test_dir("no-switch");
 
-        let result = speedtest_via_global(ops, "node-a", async { Ok((1000u64, Duration::from_millis(1))) }).await;
+        let result = speedtest_via_global(ops, "node-a", &dir, async { Ok((1000u64, Duration::from_millis(1))) }).await;
 
         assert!(result.is_ok());
         assert!(calls.lock().unwrap().is_empty(), "无需切换也就无需恢复");
+        assert!(read_journal_file(&dir).is_none(), "无需切换也就不写恢复日志");
+    }
+
+    /// 真实 mihomo 端到端(#[ignore],本地验证):
+    /// cargo test -p clash-verge --lib feat::speedtest -- --ignored --nocapture
+    /// 依赖 src-tauri/sidecar/verge-mihomo-*(prebuild 产物),缺失时跳过。
+    #[tokio::test]
+    #[ignore = "需要真实 mihomo 内核(sidecar),仅本地验证"]
+    #[allow(clippy::unwrap_used)]
+    async fn global_restore_journal_end_to_end_with_real_mihomo() {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let Some(mihomo_bin) = std::fs::read_dir(manifest.join("sidecar"))
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .find(|path| {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                name.starts_with("verge-mihomo-") && !name.contains("alpha") && !name.contains("service")
+            })
+        else {
+            println!("未找到 mihomo sidecar,跳过(先运行 scripts/prebuild.mjs)");
+            return;
+        };
+
+        struct KillOnDrop(std::process::Child);
+        impl Drop for KillOnDrop {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+
+        let workdir = temp_test_dir("e2e");
+        let controller = probe_free_port(&[]).unwrap();
+        std::fs::write(
+            workdir.join("config.yaml"),
+            format!(
+                "mode: rule\nlog-level: WARNING\nexternal-controller: 127.0.0.1:{controller}\n\
+                 proxies:\n\
+                 \x20 - name: node-a\n\x20   type: http\n\x20   server: 127.0.0.1\n\x20   port: 1\n\
+                 \x20 - name: node-b\n\x20   type: http\n\x20   server: 127.0.0.1\n\x20   port: 1\n\
+                 \x20 - name: node-c\n\x20   type: http\n\x20   server: 127.0.0.1\n\x20   port: 1\n"
+            ),
+        )
+        .unwrap();
+
+        let child = KillOnDrop(
+            std::process::Command::new(&mihomo_bin)
+                .arg("-d")
+                .arg(&workdir)
+                .arg("-f")
+                .arg(workdir.join("config.yaml"))
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
+
+        let base = format!("http://127.0.0.1:{controller}");
+        let client = reqwest::Client::new();
+        let mut ready = false;
+        for _ in 0..50 {
+            if client
+                .get(format!("{base}/version"))
+                .send()
+                .await
+                .is_ok_and(|resp| resp.status().is_success())
+            {
+                ready = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+        assert!(ready, "mihomo 未在 10s 内就绪");
+
+        // 直连真实内核 REST API 的 GlobalProxyOps 实现。
+        struct RealOps {
+            base: String,
+            client: reqwest::Client,
+        }
+        impl GlobalProxyOps for RealOps {
+            async fn global_now(&self) -> Result<Option<String>> {
+                let value: serde_json::Value = self
+                    .client
+                    .get(format!("{}/proxies/GLOBAL", self.base))
+                    .send()
+                    .await?
+                    .error_for_status()?
+                    .json()
+                    .await?;
+                Ok(value
+                    .get("now")
+                    .or_else(|| value.get("proxy").and_then(|proxy| proxy.get("now")))
+                    .and_then(|now| now.as_str())
+                    .map(str::to_string))
+            }
+
+            async fn select_global(&self, node: &str) -> Result<()> {
+                self.client
+                    .put(format!("{}/proxies/GLOBAL", self.base))
+                    .json(&serde_json::json!({ "name": node }))
+                    .send()
+                    .await?
+                    .error_for_status()?;
+                Ok(())
+            }
+        }
+        let ops = RealOps {
+            base: base.clone(),
+            client: client.clone(),
+        };
+
+        // 场景 A(核心):崩溃残留 —— 日志在盘、GLOBAL 停在被测节点 → 恢复原选择。
+        write_journal_file(
+            &workdir,
+            &GlobalRestoreJournal {
+                original: "node-a".into(),
+                target: "node-b".into(),
+            },
+        )
+        .unwrap();
+        ops.select_global("node-b").await.unwrap();
+        assert_eq!(ops.global_now().await.unwrap().as_deref(), Some("node-b"));
+        recover_pending_restore_with(&ops, &workdir).await;
+        assert_eq!(
+            ops.global_now().await.unwrap().as_deref(),
+            Some("node-a"),
+            "崩溃残留必须被恢复到原选择"
+        );
+        assert!(read_journal_file(&workdir).is_none());
+
+        // 场景 B:残留已被覆盖(用户手动切到 node-b)→ 只清日志不恢复。
+        write_journal_file(
+            &workdir,
+            &GlobalRestoreJournal {
+                original: "node-a".into(),
+                target: "node-c".into(),
+            },
+        )
+        .unwrap();
+        ops.select_global("node-b").await.unwrap();
+        recover_pending_restore_with(&ops, &workdir).await;
+        assert_eq!(
+            ops.global_now().await.unwrap().as_deref(),
+            Some("node-b"),
+            "不得覆盖用户的最新选择"
+        );
+        assert!(read_journal_file(&workdir).is_none());
+
+        // 场景 C:原选择节点已消失 → 恢复失败放弃并清日志,GLOBAL 不动。
+        write_journal_file(
+            &workdir,
+            &GlobalRestoreJournal {
+                original: "gone-node".into(),
+                target: "node-b".into(),
+            },
+        )
+        .unwrap();
+        recover_pending_restore_with(&ops, &workdir).await;
+        assert_eq!(ops.global_now().await.unwrap().as_deref(), Some("node-b"));
+        assert!(read_journal_file(&workdir).is_none());
+
+        drop(child);
+        let _ = std::fs::remove_dir_all(&workdir);
     }
 }
