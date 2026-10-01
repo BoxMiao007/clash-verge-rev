@@ -30,7 +30,10 @@ const PORT_PROBE_ATTEMPTS: u16 = 16;
 const MIN_DURATION_SECS: u64 = 1;
 const MAX_DURATION_SECS: u64 = 30;
 
+/// IPC 返回给前端的结构:与仓库约定一致用驼峰键(Tauri 不改写命令返回值的
+/// 字段名,前端按此契约读取,见下方契约测试)。
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpeedTestResult {
     /// 窗口内实际收到的字节数(解压后)。
     pub bytes: u64,
@@ -379,6 +382,21 @@ pub async fn speedtest_node(name: String, url: String, duration_secs: u64) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// IPC 契约:前端 src/services/speed.ts 读驼峰键 speedBps(Tauri 不改写
+    /// 命令返回值的字段名),漏标 rename_all 会静默变成 undefined 而非报错。
+    #[test]
+    fn ipc_payload_uses_camel_case_keys_expected_by_frontend() {
+        let value = serde_json::to_value(SpeedTestResult {
+            bytes: 1,
+            elapsed_ms: 2,
+            speed_bps: 3,
+        })
+        .unwrap();
+        assert_eq!(value["bytes"], 1);
+        assert_eq!(value["elapsedMs"], 2);
+        assert_eq!(value["speedBps"], 3);
+    }
 
     #[test]
     fn speed_bps_is_bytes_divided_by_elapsed() {
