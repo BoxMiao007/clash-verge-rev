@@ -791,11 +791,13 @@ export interface TranslationResources {
           speedtest: {
             fields: {
               speedtestDuration: string
+              speedtestMaxMb: string
               speedtestUrl: string
             }
             title: string
             tooltips: {
               speedtestDuration: string
+              speedtestMaxMb: string
               speedtestUrl: string
             }
           }
@@ -1545,6 +1547,7 @@ export interface TranslationResources {
         files: string
         hours: string
         kilobytes: string
+        megabytes: string
         milliseconds: string
         minutes: string
         seconds: string

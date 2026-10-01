@@ -55,6 +55,7 @@
     "minutes": "분",
     "hours": "시간",
     "kilobytes": "KB",
+    "megabytes": "MB",
     "files": "파일"
   },
   "placeholders": {

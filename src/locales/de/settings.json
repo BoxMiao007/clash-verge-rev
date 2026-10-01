@@ -183,11 +183,13 @@
         "title": "Geschwindigkeitstest",
         "fields": {
           "speedtestUrl": "Geschwindigkeitstest-URL",
-          "speedtestDuration": "Dauer des Geschwindigkeitstests"
+          "speedtestDuration": "Dauer des Geschwindigkeitstests",
+          "speedtestMaxMb": "Datenvolumenlimit"
         },
         "tooltips": {
           "speedtestUrl": "URL der Testdatei, die beim Geschwindigkeitstest heruntergeladen wird; leer lassen, um den integrierten Standardwert zu verwenden",
-          "speedtestDuration": "Download-Dauer eines einzelnen Geschwindigkeitstests, zwischen 1 und 30 Sekunden"
+          "speedtestDuration": "Download-Dauer eines einzelnen Geschwindigkeitstests, zwischen 1 und 30 Sekunden",
+          "speedtestMaxMb": "Maximal pro Geschwindigkeitstest heruntergeladene Datenmenge, zwischen 1 und 1024 MB; beim Erreichen des Limits endet der Test vorzeitig, 0 für unbegrenzt"
         }
       },
       "advanced": {

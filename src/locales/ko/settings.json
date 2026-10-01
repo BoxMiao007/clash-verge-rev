@@ -183,11 +183,13 @@
         "title": "속도 테스트",
         "fields": {
           "speedtestUrl": "기본 속도 테스트 URL",
-          "speedtestDuration": "기본 속도 테스트 시간"
+          "speedtestDuration": "기본 속도 테스트 시간",
+          "speedtestMaxMb": "속도 테스트 데이터 상한"
         },
         "tooltips": {
           "speedtestUrl": "속도 테스트에서 다운로드하는 테스트 파일의 URL입니다. 비워 두면 내장 기본값이 사용됩니다",
-          "speedtestDuration": "속도 테스트 1회당 다운로드 시간으로, 1~30초입니다"
+          "speedtestDuration": "속도 테스트 1회당 다운로드 시간으로, 1~30초입니다",
+          "speedtestMaxMb": "속도 테스트 1회당 최대 다운로드 데이터량으로, 상한에 도달하면 테스트가 조기 종료됩니다. 0은 무제한이며 범위는 1~1024MB입니다"
         }
       },
       "advanced": {

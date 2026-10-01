@@ -183,11 +183,13 @@
         "title": "Hız Testi",
         "fields": {
           "speedtestUrl": "Varsayılan Hız Testi URL'si",
-          "speedtestDuration": "Varsayılan Hız Testi Süresi"
+          "speedtestDuration": "Varsayılan Hız Testi Süresi",
+          "speedtestMaxMb": "Hız Testi Veri Sınırı"
         },
         "tooltips": {
           "speedtestUrl": "Hız testi sırasında indirilen test dosyasının URL'si; yerleşik varsayılan değeri kullanmak için boş bırakın",
-          "speedtestDuration": "Her hız testinin indirme süresi, 1-30 saniye arasında"
+          "speedtestDuration": "Her hız testinin indirme süresi, 1-30 saniye arasında",
+          "speedtestMaxMb": "Her hız testinde indirilen en fazla veri miktarı, 1-1024 MB arasında; sınıra ulaşıldığında test erken biter, sınırsız için 0"
         }
       },
       "advanced": {

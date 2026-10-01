@@ -235,8 +235,9 @@ class SpeedManager {
     group: string,
     url: string = DEFAULT_SPEEDTEST_URL,
     windowSecs: number = DEFAULT_SPEEDTEST_WINDOW_SECS,
+    maxBytes?: number,
   ): Promise<SpeedUpdate> {
-    const update = await this.measureSpeed(member, group, url, windowSecs)
+    const update = await this.measureSpeed(member, group, url, windowSecs, maxBytes)
     this.queueGroupNotification(group)
     return update
   }
@@ -246,6 +247,7 @@ class SpeedManager {
     group: string,
     url: string,
     windowSecs: number,
+    maxBytes?: number,
   ): Promise<SpeedUpdate> {
     const name = member.ref.name
     const apiName =
@@ -266,11 +268,13 @@ class SpeedManager {
         setTimeout(() => resolve(SPEED_TIMEOUT), windowSecs * 1000 + 10_000)
       })
 
+      // maxBytes 为 undefined 时 JSON 序列化会丢弃该键,后端 Option 收到 None 即不限。
       const result = await Promise.race([
         invoke<SpeedTestResult>('speedtest_node', {
           name: apiName,
           url,
           durationSecs: windowSecs,
+          maxBytes,
         }),
         fallback,
       ])
@@ -301,6 +305,7 @@ class SpeedManager {
     group: string,
     url: string = DEFAULT_SPEEDTEST_URL,
     windowSecs: number = DEFAULT_SPEEDTEST_WINDOW_SECS,
+    maxBytes?: number,
   ) {
     debugLog(
       `[SpeedManager] 批量测试速度开始，组: ${group}, 数量: ${proxies.length}`,
@@ -316,7 +321,7 @@ class SpeedManager {
       for (const member of proxies) {
         const name = member.ref.name
         try {
-          await this.measureSpeed(member, group, url, windowSecs)
+          await this.measureSpeed(member, group, url, windowSecs, maxBytes)
         } catch (error) {
           // 单个节点的意外异常不拖垮整组;结果落失败态,继续下一个。
           console.error(

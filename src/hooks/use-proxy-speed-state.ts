@@ -10,6 +10,7 @@ import {
 import {
   SPEED_TESTING,
   resolveSpeedtestDurationSecs,
+  resolveSpeedtestMaxBytes,
   resolveSpeedtestUrl,
 } from '@/utils/speed'
 
@@ -44,6 +45,9 @@ export function useProxySpeedState(
   const speedtestUrl = resolveSpeedtestUrl(verge?.default_speedtest_url)
   const speedtestDurationSecs = resolveSpeedtestDurationSecs(
     verge?.default_speedtest_duration,
+  )
+  const speedtestMaxBytes = resolveSpeedtestMaxBytes(
+    verge?.default_speedtest_max_mb,
   )
 
   useEffect(() => {
@@ -82,6 +86,7 @@ export function useProxySpeedState(
         groupName,
         speedtestUrl,
         speedtestDurationSecs,
+        speedtestMaxBytes,
       ),
     )
   })

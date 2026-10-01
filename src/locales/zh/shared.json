@@ -55,6 +55,7 @@
     "minutes": "分钟",
     "hours": "小时",
     "kilobytes": "KB",
+    "megabytes": "MB",
     "files": "文件"
   },
   "placeholders": {
