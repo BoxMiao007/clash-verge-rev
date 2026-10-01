@@ -76,6 +76,9 @@ impl CoreManager {
     /// Restores profile selections before callers enable the system proxy.
     /// The bounded first pass continues in the background, and later calls supersede earlier ones.
     async fn restore_selected_nodes(&self) {
+        // 测速 GLOBAL 恢复日志与分组选择无关,不受 pending commit 短路影响;
+        // 挂在此处可覆盖 sidecar/service 全部内核启动路径。
+        crate::feat::recover_pending_restore().await;
         if PROFILE_SELECTIONS_PENDING_COMMIT
             .try_with(|pending| *pending)
             .unwrap_or(false)
