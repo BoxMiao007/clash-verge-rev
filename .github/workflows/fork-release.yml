@@ -1,0 +1,97 @@
+name: Fork Release
+
+# 本 fork 专用的正式版发布:tag 推送触发,官方 identity,仅 Windows x64。
+# tag 命名 v<上游基线>-fork.<序号>(如 v2.5.7-fork.1);应用版本在 CI 内盖为
+# build metadata 形式的「上游基线+fork.<序号>」(如 2.5.7+fork.1)——release-version.mjs
+# 只接受这种 fork 后缀(与 autobuild 的 +autobuild.* 约定一致),不污染 dev 版本号。
+#
+# 更新器已在 tauri.conf.json 禁用(ADR-0002),构建无需签名密钥;
+# 应用内「检查更新」不可用属预期,升级 = 安装新 tag 的安装包覆盖。
+#
+# 工作流文件必须存在于被发布 tag 的提交里:先合入 dev 再打 tag。
+# 重发同一 tag:gh workflow run fork-release.yml --repo BoxMiao007/clash-verge-rev -f tag=v2.5.7-fork.1
+
+on:
+  push:
+    tags:
+      - 'v*-fork.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要构建发布的 tag(如 v2.5.7-fork.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-win-x64:
+    runs-on: windows-latest
+    env:
+      # dispatch 时是输入的 tag,tag 推送时是触发它的 tag 名
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.1.0
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.21.0'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download sidecar (mihomo)
+        run: pnpm run prebuild x86_64-pc-windows-msvc
+
+      # 仓库是 workspace 布局,target 目录在仓库根;固定 key + 强制保存,跨 tag 复用缓存
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: 'v1-rust'
+          key: 'fork-release-x86_64-pc-windows-msvc'
+          save-if: 'true'
+          workspaces: |
+            . -> target
+
+      # tag v2.5.7-fork.1 -> 版本 2.5.7+fork.1
+      - name: Stamp release version from tag
+        shell: bash
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          VERSION="${VERSION/-fork./+fork.}"
+          echo "Stamping version: $VERSION"
+          pnpm release-version "$VERSION"
+
+      # 官方 identity(dev 默认配置);bundle targets 默认 all,Windows 上产出
+      # nsis + msi,发布只取 nsis。不走 CLI 参数——pnpm 转发会误递给 cargo。
+      - name: Build installers
+        env:
+          NODE_OPTIONS: '--max_old_space_size=4096'
+        run: pnpm build
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: 'Clash Verge Rev ${{ env.RELEASE_TAG }} (fork)'
+          body: |
+            本 fork 的正式版:上游对应基线 + fork 自有功能(见仓库 AGENTS.md 功能清单)。
+
+            - 与官方版数据完全兼容:同一应用 identity,覆盖安装,订阅与配置无需迁移。
+            - 应用内更新已禁用,「检查更新」报错属预期;升级请下载新版安装包覆盖安装。
+            - 仅提供 Windows x64 安装包。
+          prerelease: false
+          files: target/release/bundle/nsis/*-setup.exe
