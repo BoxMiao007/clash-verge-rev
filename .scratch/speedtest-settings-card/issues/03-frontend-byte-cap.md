@@ -19,7 +19,7 @@
 
 实现提交 `b1106b15`(分支 feat/speedtest-settings-card-03,经 `3e1bb034` 合入集成分支)。
 
-- `utils/speed.ts`:`resolveSpeedtestMaxMb`(输入即时归一,0/负数/非整数归 0 不限、越界夹 1024)与 `resolveSpeedtestMaxBytes`(MB→字节,非法一律不限,语义对齐后端 normalize_max_bytes),7 个边界直测用例;`services/speed.ts` 单项/整组可选 `maxBytes` 透传,3 个契约用例;两处消费方带上限。
+- `utils/speed.ts`:`resolveSpeedtestMaxMb`(输入即时归一,0/负数/非整数归 0 不限、越界夹 1024)与 `resolveSpeedtestMaxBytes`(MB→字节,非法一律不限,语义对齐后端 normalize_max_bytes),4 个边界直测用例覆盖 7 类边界情形;`services/speed.ts` 单项/整组可选 `maxBytes` 透传,3 个契约用例;两处消费方带上限。
 - `verge.rs` `Option<u16>` + patch 通道、`global.d.ts` 同步;卡片新条目 + 13 语言文案;i18n 生成物重生成;AGENTS.md 功能清单行更新。
 - 验证:typecheck、vitest 60 用例、i18n:check、cargo check 全绿。评审修复 `dcc25a1c` 共享两函数的非法性谓词(行为逐字节等价)。
 - 遗留:最后一项的自动化部分全绿;应用内人工验证(设 1 MB 上限整组测速、快节点提前截断且结果正常)待维护者执行。
