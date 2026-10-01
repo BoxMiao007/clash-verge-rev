@@ -29,6 +29,17 @@
   - 验证门通过后做功能巡检:用 `git diff <上一个 sync 标签>..upstream/dev --name-only` 列出本次同步引入的上游改动,对照「功能清单」的关键文件,输出受影响功能报告——波及哪些功能、判断依据、建议用户在应用里实际验证的点;没有历史标签时以本次合并的 merge-base 为基准。
   - 巡检完成后打标签 `sync/<YYYY-MM-DD>`,与代码一起推送到 `origin`(只能推 `origin`)。
 
+## 测试包构建(Windows x64)
+
+给维护者出人工验收用的 Windows x64 安装包时,用 dev 上的 `win-x64-test-build.yml` 工作流,不在本地打包。
+
+- 被测分支需自带:工作流文件(GitHub 要求 dispatch 的 ref 上存在同名工作流)+ 测试变体配置(Cargo.toml 默认 features 加 `verge-dev`、tauri.conf 用 `.dev` identifier 且 `bundle.targets` 限 `nsis`),参考 `ci/win-test-build` 分支。
+- 触发:`gh workflow run win-x64-test-build.yml --repo BoxMiao007/clash-verge-rev --ref <被测分支>`;`gh` 不带 `--repo` 会打到上游。
+- 产物在 Actions artifact,实际路径为仓库根 `target/release/bundle/nsis/*.exe`(workspace 布局,不在 src-tauri/target)。
+- 构建命令只有 `pnpm build`:tauri CLI 参数经 `pnpm --` 转发会误递给 cargo;verge-dev 与 nsis 走分支配置,不走 CLI 参数。
+- 测试包为 `.dev` 身份,数据目录/单实例/系统服务均与官方安装版隔离,可并存;首次启动需重新导入订阅。
+- CI 签名密钥在 fork secrets(`TAURI_PRIVATE_KEY`/`TAURI_KEY_PASSWORD`),一次性密钥,仅为满足 `createUpdaterArtifacts` 的构建签名要求,与官方更新链无关;丢失则 `pnpm tauri signer generate` 重新生成后 `gh secret set`。
+
 ## 功能清单
 
 本 fork 相对上游的自有功能登记处:新功能合入 `dev` 时必须登记一行,功能下线时移除。agent 会话以此了解本 fork 有哪些功能;设计背景见 `.scratch/<feature>/` 的 spec,代码演变见 git 历史(`git log upstream/dev..dev --no-merges`)。
