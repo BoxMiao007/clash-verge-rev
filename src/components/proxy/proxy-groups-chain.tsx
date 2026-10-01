@@ -90,6 +90,7 @@ interface ProxyGroupsChainProps {
 
   // Shared callbacks
   onCheckAll: (groupName: string) => void
+  onSpeedCheckAll: (groupName: string) => void
   onHeadState: (groupName: string, patch: Partial<HeadState>) => void
   onLocation: (group: any) => void
   onGroupSelect: (groupName: string) => void
@@ -232,6 +233,7 @@ function ProxyVirtualList({
   measureElement,
   onLocation,
   onCheckAll,
+  onSpeedCheckAll,
   onHeadState,
   onChangeProxy,
 }: {
@@ -245,6 +247,7 @@ function ProxyVirtualList({
   measureElement: (node: Element | null) => void
   onLocation: (group: any) => void
   onCheckAll: (groupName: string) => void
+  onSpeedCheckAll: (groupName: string) => void
   onHeadState: (groupName: string, patch: Partial<HeadState>) => void
   onChangeProxy: (group: ProxyGroupView, member: ResolvedProxyMember) => void
 }) {
@@ -285,6 +288,7 @@ function ProxyVirtualList({
               item={renderList[virtualItem.index]}
               onLocation={onLocation}
               onCheckAll={onCheckAll}
+              onSpeedCheckAll={onSpeedCheckAll}
               onHeadState={onHeadState}
               onChangeProxy={onChangeProxy}
               isChainMode={isChainMode}
@@ -314,6 +318,7 @@ export function ProxyGroupsChain(props: ProxyGroupsChainProps) {
     activeStickyIndex,
     measureElement,
     onCheckAll,
+    onSpeedCheckAll,
     onHeadState,
     onLocation,
     onGroupSelect,
@@ -476,6 +481,7 @@ export function ProxyGroupsChain(props: ProxyGroupsChainProps) {
         measureElement={measureElement}
         onLocation={onLocation}
         onCheckAll={onCheckAll}
+        onSpeedCheckAll={onSpeedCheckAll}
         onHeadState={onHeadState}
         onChangeProxy={handleChangeProxy}
       />

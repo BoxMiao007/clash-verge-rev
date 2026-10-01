@@ -602,6 +602,8 @@ export interface TranslationResources {
           sortDefault: string
           sortDelay: string
           sortName: string
+          sortSpeed: string
+          speedCheck: string
         }
       }
     }
@@ -1118,6 +1120,8 @@ export interface TranslationResources {
             autoLogClean: string
             defaultLatencyTest: string
             defaultLatencyTimeout: string
+            defaultSpeedtestDuration: string
+            defaultSpeedtestUrl: string
             enableBuiltinEnhanced: string
             proxyLayoutColumns: string
           }
@@ -1135,6 +1139,8 @@ export interface TranslationResources {
             autoCloseConnections: string
             autoDelayDetection: string
             defaultLatencyTest: string
+            defaultSpeedtestDuration: string
+            defaultSpeedtestUrl: string
             enableBuiltinEnhanced: string
           }
         }
@@ -1424,6 +1430,7 @@ export interface TranslationResources {
         retry: string
         save: string
         showDetails: string
+        speedCheck: string
         tableView: string
         upgrade: string
       }

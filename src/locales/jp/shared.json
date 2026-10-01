@@ -24,7 +24,8 @@
     "clear": "クリア",
     "previous": "Previous",
     "next": "Next",
-    "check": "検査"
+    "check": "検査",
+    "speedCheck": "速度テスト"
   },
   "labels": {
     "updateAt": "更新日時",

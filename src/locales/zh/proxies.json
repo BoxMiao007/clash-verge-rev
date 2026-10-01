@@ -31,9 +31,11 @@
     "tooltips": {
       "locate": "当前节点",
       "delayCheck": "延迟测试",
+      "speedCheck": "速度测试",
       "sortDefault": "默认排序",
       "sortDelay": "按延迟排序",
       "sortName": "按名称排序",
+      "sortSpeed": "按下载速度排序",
       "delayCheckUrl": "延迟测试链接",
       "showBasic": "隐藏节点细节",
       "showDetail": "展示节点细节",

@@ -24,7 +24,8 @@
     "clear": "Limpiar",
     "previous": "Previous",
     "next": "Next",
-    "check": "Comprobar"
+    "check": "Comprobar",
+    "speedCheck": "Prueba de velocidad"
   },
   "labels": {
     "updateAt": "Actualizado el",

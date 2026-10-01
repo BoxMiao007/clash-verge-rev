@@ -415,13 +415,17 @@
         "autoDelayDetection": "اكتشاف التأخير التلقائي",
         "autoDelayDetectionInterval": "الفاصل الزمني لاكتشاف التأخير التلقائي",
         "defaultLatencyTest": "اختبار التأخير الافتراضي",
-        "defaultLatencyTimeout": "مهلة التأخير الافتراضية"
+        "defaultLatencyTimeout": "مهلة التأخير الافتراضية",
+        "defaultSpeedtestUrl": "رابط اختبار السرعة الافتراضي",
+        "defaultSpeedtestDuration": "مدة اختبار السرعة الافتراضية"
       },
       "tooltips": {
         "autoCloseConnections": "إنهاء الاتصالات القائمة عند تغيير اختيار مجموعة الوكيل أو وضع الوكيل",
         "enableBuiltinEnhanced": "معالجة توافق ملف التكوين",
         "autoDelayDetection": "يختبر زمن استجابة العقدة الحالية على نحو دوري في الخلفية",
-        "defaultLatencyTest": "يُستخدم فقط لاختبار طلب HTTP العميل. لن يؤثر على ملف التكوين"
+        "defaultLatencyTest": "يُستخدم فقط لاختبار طلب HTTP العميل. لن يؤثر على ملف التكوين",
+        "defaultSpeedtestUrl": "عنوان ملف الاختبار الذي يتم تنزيله أثناء اختبارات السرعة؛ اتركه فارغًا لاستخدام القيمة الافتراضية المدمجة",
+        "defaultSpeedtestDuration": "مدة التنزيل لكل اختبار سرعة، بين 1 و30 ثانية"
       },
       "options": {
         "proxyLayoutColumns": {

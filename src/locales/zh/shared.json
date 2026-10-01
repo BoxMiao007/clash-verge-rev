@@ -24,7 +24,8 @@
     "clear": "清除",
     "previous": "上一页",
     "next": "下一页",
-    "check": "检测"
+    "check": "检测",
+    "speedCheck": "速度测试"
   },
   "labels": {
     "updateAt": "更新于",

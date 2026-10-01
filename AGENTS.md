@@ -46,7 +46,7 @@
 
 | 功能 | 一句话说明 | 关键文件/入口 | 引入提交 |
 | ---- | ---------- | -------------- | -------- |
-| (暂无登记,第一个功能合入时添加) | | | |
+| 节点下载测速 | 整组/单项限时下载测速,GLOBAL 专用通道不干扰当前选择,支持按速度排序与自定义 URL/时长 | `src/services/speed.ts`、`src-tauri/src/feat/speedtest.rs`、代理页(按钮与排序) | `037da98a` |
 
 ## 降低合并冲突的约定
 
@@ -66,4 +66,4 @@ Issues 以本地 markdown 文件形式存放在 `.scratch/<feature>/`。见 `doc
 
 ### Domain docs
 
-单上下文布局:根目录 `CONTEXT.md` + `docs/adr/`,按需懒创建。见 `docs/agents/domain.md`。
+单上下文布局:根目录 `GLOSSARY.md` + `docs/adr/`,按需懒创建。见 `docs/agents/domain.md`。

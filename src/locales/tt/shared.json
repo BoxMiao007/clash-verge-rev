@@ -24,7 +24,8 @@
     "clear": "Чистарту",
     "previous": "Previous",
     "next": "Next",
-    "check": "Тикшерү"
+    "check": "Тикшерү",
+    "speedCheck": "Тизлек тикшерү"
   },
   "labels": {
     "updateAt": "Яңартылган вакыт",

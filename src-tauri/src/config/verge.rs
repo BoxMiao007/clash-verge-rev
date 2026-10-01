@@ -121,6 +121,11 @@ pub struct IVerge {
 
     pub default_latency_timeout: Option<i16>,
 
+    /// 下载测速的测试文件地址与测速时长(秒);未配置时前端兜底内置默认值。
+    pub default_speedtest_url: Option<String>,
+
+    pub default_speedtest_duration: Option<u16>,
+
     pub enable_auto_delay_detection: Option<bool>,
 
     /// 自动检测当前节点延迟的间隔（分钟）
@@ -471,6 +476,8 @@ impl IVerge {
         patch!(auto_check_update);
         patch!(default_latency_test);
         patch!(default_latency_timeout);
+        patch!(default_speedtest_url);
+        patch!(default_speedtest_duration);
         patch!(enable_auto_delay_detection);
         patch!(auto_delay_detection_interval_minutes);
         patch!(enable_builtin_enhanced);

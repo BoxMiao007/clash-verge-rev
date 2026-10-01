@@ -415,13 +415,17 @@
         "autoDelayDetection": "Автоматик тоткарлык ачыклау",
         "autoDelayDetectionInterval": "Автоматик тоткарлык ачыклау интервалы",
         "defaultLatencyTest": "Тоткарлануны тикшерү сылтамасы (defaults)",
-        "defaultLatencyTimeout": "Тоткарлануның стандарт таймауты"
+        "defaultLatencyTimeout": "Тоткарлануның стандарт таймауты",
+        "defaultSpeedtestUrl": "Тизлек тикшерү сылтамасы",
+        "defaultSpeedtestDuration": "Тизлек тикшерү вакыты"
       },
       "tooltips": {
         "autoCloseConnections": "Прокси төркеме яисә режимын үзгәрткәндә актив тоташуларны өзү",
         "enableBuiltinEnhanced": "Конфигурация файлы белән туры килә торган өстәмә оптимизация",
         "autoDelayDetection": "Фон режимында хәзерге төен тоткарлыгын периодик тикшерә",
-        "defaultLatencyTest": "Бу фәкать клиентның HTTP сораулары тесты өчен кулланыла, конфигурация файлына йогынты ясамый"
+        "defaultLatencyTest": "Бу фәкать клиентның HTTP сораулары тесты өчен кулланыла, конфигурация файлына йогынты ясамый",
+        "defaultSpeedtestUrl": "Тизлек тикшерүендә йөкләп алына торган сынак файл сылтамасы; эчке стандарт кыйммәтне куллану өчен буш калдырыгыз",
+        "defaultSpeedtestDuration": "Һәр тизлек тикшерүенең йөкләү вакыты, 1-30 секунд аралыгында"
       },
       "options": {
         "proxyLayoutColumns": {

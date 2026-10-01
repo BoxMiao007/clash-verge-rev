@@ -24,7 +24,8 @@
     "clear": "Löschen",
     "previous": "Previous",
     "next": "Next",
-    "check": "Prüfen"
+    "check": "Prüfen",
+    "speedCheck": "Geschwindigkeitstest"
   },
   "labels": {
     "updateAt": "Aktualisiert am",

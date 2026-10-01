@@ -7,6 +7,7 @@ mod icon;
 mod listener;
 mod profile;
 mod proxy;
+mod speedtest;
 mod tun;
 mod window;
 
@@ -20,5 +21,6 @@ pub use icon::*;
 pub use listener::*;
 pub use profile::*;
 pub use proxy::*;
+pub use speedtest::*;
 pub use tun::*;
 pub use window::*;

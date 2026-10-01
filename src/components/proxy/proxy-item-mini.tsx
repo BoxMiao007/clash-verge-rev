@@ -4,12 +4,14 @@ import { useTranslation } from 'react-i18next'
 
 import { BaseLoading } from '@/components/base'
 import { useProxyDelayState } from '@/hooks/use-proxy-delay-state'
+import { useProxySpeedState } from '@/hooks/use-proxy-speed-state'
 import delayManager from '@/services/delay'
 import {
   memberDetails,
   type ProxyGroupView,
   type ResolvedProxyMember,
 } from '@/types/proxy-view'
+import { formatSpeed, formatSpeedColor } from '@/utils/speed'
 
 interface Props {
   group: ProxyGroupView
@@ -35,6 +37,8 @@ export const ProxyItemMini = (props: Props) => {
     member,
     group.name,
   )
+  // -2 测量中, -3 超时, -1 未测试, 0 失败, >0 字节/秒
+  const { speedValue, onSpeed } = useProxySpeedState(member, group.name)
 
   return (
     <ListItemButton
@@ -59,6 +63,10 @@ export const ProxyItemMini = (props: Props) => {
           return {
             '&:hover .the-check': { display: !showDelay ? 'block' : 'none' },
             '&:hover .the-delay': { display: showDelay ? 'block' : 'none' },
+            // 悬停出现速度测试按钮:仅未测试时;有结果/测量中展示对应内容
+            '&:hover .the-speed-check': {
+              display: speedValue === -1 ? 'block' : 'none',
+            },
             '&:hover .the-icon': { display: 'none' },
             '& .the-pin, & .the-unpin': {
               position: 'absolute',
@@ -155,7 +163,15 @@ export const ProxyItemMini = (props: Props) => {
         )}
       </Box>
       <Box
-        sx={{ ml: 0.5, color: 'primary.main', display: isPreset ? 'none' : '' }}
+        // 纵向 flex 且右贴齐:延迟/速度/加载点各状态子项右缘对齐,
+        // 块级布局时短文本(延迟值)会左缩、与速度值右缘错开。
+        sx={{
+          ml: 0.5,
+          color: 'primary.main',
+          display: isPreset ? 'none' : 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+        }}
       >
         {!unresolved && delayValue === -2 && (
           <Widget>
@@ -194,6 +210,46 @@ export const ProxyItemMini = (props: Props) => {
             })}
           >
             {delayManager.formatDelay(delayValue, timeout)}
+          </Widget>
+        )}
+        {!unresolved && speedValue === -2 && (
+          // 速度测量中
+          <Widget>
+            <BaseLoading />
+          </Widget>
+        )}
+        {!unresolved && speedValue === -1 && (
+          // 悬停显示速度测试按钮
+          <Widget
+            className="the-speed-check"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void onSpeed()
+            }}
+            sx={({ palette }) => ({
+              display: 'none', // hover 时显示
+              ':hover': { bgcolor: alpha(palette.primary.main, 0.15) },
+            })}
+          >
+            {t('shared.actions.speedCheck')}
+          </Widget>
+        )}
+        {!unresolved && (speedValue >= 0 || speedValue === -3) && (
+          // 显示下载速度(常驻,点击重测)
+          <Widget
+            className="the-speed"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void onSpeed()
+            }}
+            sx={({ palette }) => ({
+              color: formatSpeedColor(speedValue),
+              ':hover': { bgcolor: alpha(palette.primary.main, 0.15) },
+            })}
+          >
+            {formatSpeed(speedValue)}
           </Widget>
         )}
         {!unresolved &&

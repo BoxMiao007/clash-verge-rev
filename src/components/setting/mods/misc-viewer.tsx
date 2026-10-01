@@ -14,6 +14,13 @@ import { useTranslation } from 'react-i18next'
 import { BaseDialog, DialogRef, Switch, TooltipIcon } from '@/components/base'
 import { useVerge } from '@/hooks/use-verge'
 import { showNotice } from '@/services/notice-service'
+import {
+  DEFAULT_SPEEDTEST_URL,
+  DEFAULT_SPEEDTEST_WINDOW_SECS,
+  MIN_SPEEDTEST_DURATION_SECS,
+  clampSpeedtestDurationSecs,
+  resolveSpeedtestDurationSecs,
+} from '@/utils/speed'
 
 export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
   const { t } = useTranslation()
@@ -33,6 +40,8 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
     defaultLatencyTest: '',
     autoLogClean: 2,
     defaultLatencyTimeout: 10000,
+    defaultSpeedtestUrl: '',
+    defaultSpeedtestDuration: DEFAULT_SPEEDTEST_WINDOW_SECS,
   })
 
   useImperativeHandle(ref, () => ({
@@ -52,6 +61,10 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
         defaultLatencyTest: verge?.default_latency_test || '',
         autoLogClean: verge?.auto_log_clean || 0,
         defaultLatencyTimeout: verge?.default_latency_timeout || 10000,
+        defaultSpeedtestUrl: verge?.default_speedtest_url || '',
+        defaultSpeedtestDuration: resolveSpeedtestDurationSecs(
+          verge?.default_speedtest_duration,
+        ),
       })
     },
     close: () => setOpen(false),
@@ -72,6 +85,11 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
           values.autoDelayDetectionIntervalMinutes,
         default_latency_test: values.defaultLatencyTest,
         default_latency_timeout: values.defaultLatencyTimeout,
+        // 空 URL 存空串(运行时回落内置默认);时长经解析夹到合法区间。
+        default_speedtest_url: values.defaultSpeedtestUrl.trim(),
+        default_speedtest_duration: resolveSpeedtestDurationSecs(
+          values.defaultSpeedtestDuration,
+        ),
         auto_log_clean: values.autoLogClean as any,
       })
       setOpen(false)
@@ -415,6 +433,68 @@ export const MiscViewer = forwardRef<DialogRef>((props, ref) => {
                 endAdornment: (
                   <InputAdornment position="end">
                     {t('shared.units.milliseconds')}
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+        </ListItem>
+
+        <ListItem sx={{ padding: '5px 2px' }}>
+          <ListItemText
+            primary={t('settings.modals.misc.fields.defaultSpeedtestUrl')}
+            sx={{ maxWidth: 'fit-content' }}
+          />
+          <TooltipIcon
+            title={t('settings.modals.misc.tooltips.defaultSpeedtestUrl')}
+            sx={{ opacity: '0.7' }}
+          />
+          <TextField
+            autoComplete="new-password"
+            size="small"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            sx={{ width: 250, marginLeft: 'auto' }}
+            value={values.defaultSpeedtestUrl}
+            placeholder={DEFAULT_SPEEDTEST_URL}
+            onChange={(e) =>
+              setValues((v) => ({ ...v, defaultSpeedtestUrl: e.target.value }))
+            }
+          />
+        </ListItem>
+
+        <ListItem sx={{ padding: '5px 2px' }}>
+          <ListItemText
+            primary={t('settings.modals.misc.fields.defaultSpeedtestDuration')}
+            sx={{ maxWidth: 'fit-content' }}
+          />
+          <TooltipIcon
+            title={t('settings.modals.misc.tooltips.defaultSpeedtestDuration')}
+            sx={{ opacity: '0.7' }}
+          />
+          <TextField
+            autoComplete="new-password"
+            size="small"
+            type="number"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            sx={{ width: 250, marginLeft: 'auto' }}
+            value={values.defaultSpeedtestDuration}
+            placeholder={String(DEFAULT_SPEEDTEST_WINDOW_SECS)}
+            onChange={(e) => {
+              const parsed = parseInt(e.target.value, 10)
+              const duration = Number.isFinite(parsed)
+                ? clampSpeedtestDurationSecs(parsed)
+                : MIN_SPEEDTEST_DURATION_SECS
+              setValues((v) => ({ ...v, defaultSpeedtestDuration: duration }))
+            }}
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {t('shared.units.seconds')}
                   </InputAdornment>
                 ),
               },
