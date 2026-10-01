@@ -115,6 +115,63 @@ describe('状态转换', () => {
   })
 })
 
+describe('流量上限透传', () => {
+  test('单项测速把 maxBytes 原样传给后端命令', async () => {
+    const { invoke } = await import('@tauri-apps/api/core')
+    await speedManager.checkSpeed(
+      node('cap'),
+      'g',
+      'https://example.com/file',
+      1,
+      1_048_576,
+    )
+
+    expect(invoke).toHaveBeenCalledWith('speedtest_node', {
+      name: 'cap',
+      url: 'https://example.com/file',
+      durationSecs: 1,
+      maxBytes: 1_048_576,
+    })
+  })
+
+  test('未传流量上限时 maxBytes 为 undefined(后端不限,既有调用向后兼容)', async () => {
+    const { invoke } = await import('@tauri-apps/api/core')
+    await speedManager.checkSpeed(node('nocap'), 'g')
+
+    expect(invoke).toHaveBeenCalledWith('speedtest_node', {
+      name: 'nocap',
+      url: expect.any(String),
+      durationSecs: expect.any(Number),
+      maxBytes: undefined,
+    })
+  })
+
+  test('整组测速把 maxBytes 原样传给后端命令', async () => {
+    vi.useFakeTimers()
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const pending = speedManager.checkListSpeed(
+        [node('c1')],
+        'cap-batch',
+        'https://example.com/file',
+        1,
+        1_048_576,
+      )
+      await vi.advanceTimersByTimeAsync(2000)
+      await pending
+
+      expect(invoke).toHaveBeenCalledWith('speedtest_node', {
+        name: 'c1',
+        url: 'https://example.com/file',
+        durationSecs: 1,
+        maxBytes: 1_048_576,
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('TTL 过期', () => {
   test('超过 30 分钟后缓存视为未测试', async () => {
     vi.useFakeTimers()

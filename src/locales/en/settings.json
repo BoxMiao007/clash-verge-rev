@@ -179,6 +179,19 @@
           "hotkeySetting": "Hotkey Setting"
         }
       },
+      "speedtest": {
+        "title": "Speed Test",
+        "fields": {
+          "speedtestUrl": "Speed Test URL",
+          "speedtestDuration": "Speed Test Duration",
+          "speedtestMaxMb": "Speed Test Data Cap"
+        },
+        "tooltips": {
+          "speedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
+          "speedtestDuration": "Download window of each speed test, between 1 and 30 seconds",
+          "speedtestMaxMb": "Maximum data downloaded per speed test, between 1 and 1024 MB; reaching the cap ends the test early, 0 for unlimited"
+        }
+      },
       "advanced": {
         "title": "Verge Advanced Setting",
         "tooltips": {
@@ -415,17 +428,13 @@
         "autoDelayDetection": "Auto Delay Detection",
         "autoDelayDetectionInterval": "Auto Delay Detection Interval",
         "defaultLatencyTest": "Default Latency Test",
-        "defaultLatencyTimeout": "Default Latency Timeout",
-        "defaultSpeedtestUrl": "Speed Test URL",
-        "defaultSpeedtestDuration": "Speed Test Duration"
+        "defaultLatencyTimeout": "Default Latency Timeout"
       },
       "tooltips": {
         "autoCloseConnections": "Terminate established connections when the proxy group selection or proxy mode changes",
         "enableBuiltinEnhanced": "Compatibility handling for the configuration file",
         "autoDelayDetection": "Periodically test the current node latency in the background",
-        "defaultLatencyTest": "Used for HTTP client request testing only and won't make a difference to the configuration file",
-        "defaultSpeedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
-        "defaultSpeedtestDuration": "Download window of each speed test, between 1 and 30 seconds"
+        "defaultLatencyTest": "Used for HTTP client request testing only and won't make a difference to the configuration file"
       },
       "options": {
         "proxyLayoutColumns": {

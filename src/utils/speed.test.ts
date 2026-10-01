@@ -4,6 +4,7 @@ import {
   DEFAULT_SPEEDTEST_WINDOW_SECS,
   DEFAULT_SPEEDTEST_URL,
   MAX_SPEEDTEST_DURATION_SECS,
+  MAX_SPEEDTEST_MAX_MB,
   MIN_SPEEDTEST_DURATION_SECS,
   SPEED_TESTING,
   SPEED_TIMEOUT,
@@ -13,6 +14,8 @@ import {
   formatSpeed,
   formatSpeedColor,
   resolveSpeedtestDurationSecs,
+  resolveSpeedtestMaxBytes,
+  resolveSpeedtestMaxMb,
   resolveSpeedtestUrl,
 } from './speed'
 
@@ -135,5 +138,43 @@ describe('resolveSpeedtestDurationSecs', () => {
     expect(resolveSpeedtestDurationSecs(null)).toBe(
       DEFAULT_SPEEDTEST_WINDOW_SECS,
     )
+  })
+})
+
+describe('resolveSpeedtestMaxMb', () => {
+  test('区间内原样返回,越界夹到上界(0 是合法输入,表示不限)', () => {
+    expect(resolveSpeedtestMaxMb(0)).toBe(0)
+    expect(resolveSpeedtestMaxMb(1)).toBe(1)
+    expect(resolveSpeedtestMaxMb(5)).toBe(5)
+    expect(resolveSpeedtestMaxMb(MAX_SPEEDTEST_MAX_MB)).toBe(
+      MAX_SPEEDTEST_MAX_MB,
+    )
+    expect(resolveSpeedtestMaxMb(2000)).toBe(MAX_SPEEDTEST_MAX_MB)
+  })
+
+  test('负数、非整数与非有限值归 0(不限)', () => {
+    expect(resolveSpeedtestMaxMb(-3)).toBe(0)
+    expect(resolveSpeedtestMaxMb(2.5)).toBe(0)
+    expect(resolveSpeedtestMaxMb(Number.NaN)).toBe(0)
+    expect(resolveSpeedtestMaxMb(Number.POSITIVE_INFINITY)).toBe(0)
+    expect(resolveSpeedtestMaxMb(undefined)).toBe(0)
+    expect(resolveSpeedtestMaxMb(null)).toBe(0)
+  })
+})
+
+describe('resolveSpeedtestMaxBytes', () => {
+  test('合法值由 MB 换算为字节', () => {
+    expect(resolveSpeedtestMaxBytes(1)).toBe(1_048_576)
+    expect(resolveSpeedtestMaxBytes(1024)).toBe(1_073_741_824)
+  })
+
+  test('0、未配置、非法(负数、非整数、越界)一律不限', () => {
+    expect(resolveSpeedtestMaxBytes(0)).toBeUndefined()
+    expect(resolveSpeedtestMaxBytes(-1)).toBeUndefined()
+    expect(resolveSpeedtestMaxBytes(2.5)).toBeUndefined()
+    expect(resolveSpeedtestMaxBytes(Number.NaN)).toBeUndefined()
+    expect(resolveSpeedtestMaxBytes(2000)).toBeUndefined()
+    expect(resolveSpeedtestMaxBytes(undefined)).toBeUndefined()
+    expect(resolveSpeedtestMaxBytes(null)).toBeUndefined()
   })
 })

@@ -179,6 +179,19 @@
           "hotkeySetting": "ホットキー設定"
         }
       },
+      "speedtest": {
+        "title": "速度テスト",
+        "fields": {
+          "speedtestUrl": "速度テストURL",
+          "speedtestDuration": "速度テスト時間",
+          "speedtestMaxMb": "速度テストデータ上限"
+        },
+        "tooltips": {
+          "speedtestUrl": "速度テストでダウンロードするテストファイルのURL。空欄の場合は内蔵のデフォルト値が使用されます",
+          "speedtestDuration": "1回の速度テストのダウンロード時間(1〜30秒)",
+          "speedtestMaxMb": "1回の速度テストでダウンロードする最大データ量。上限に達するとテストは早めに終了します(0で無制限、1〜1024MB)"
+        }
+      },
       "advanced": {
         "title": "Verge詳細設定",
         "tooltips": {
@@ -415,17 +428,13 @@
         "autoDelayDetection": "自動遅延検出",
         "autoDelayDetectionInterval": "自動遅延検出間隔",
         "defaultLatencyTest": "デフォルトの遅延テストURL",
-        "defaultLatencyTimeout": "テストタイムアウト時間",
-        "defaultSpeedtestUrl": "速度テストURL",
-        "defaultSpeedtestDuration": "速度テスト時間"
+        "defaultLatencyTimeout": "テストタイムアウト時間"
       },
       "tooltips": {
         "autoCloseConnections": "プロキシグループで選択されたノードまたはプロキシモードが変更されたときに、既存の接続を閉じます。",
         "enableBuiltinEnhanced": "設定ファイルの互換性処理",
         "autoDelayDetection": "バックグラウンドで現在のノードのレイテンシーを定期的にテストします",
-        "defaultLatencyTest": "HTTPクライアントリクエストテストにのみ使用され、設定ファイルには影響しません。",
-        "defaultSpeedtestUrl": "速度テストでダウンロードするテストファイルのURL。空欄の場合は内蔵のデフォルト値が使用されます",
-        "defaultSpeedtestDuration": "1回の速度テストのダウンロード時間(1〜30秒)"
+        "defaultLatencyTest": "HTTPクライアントリクエストテストにのみ使用され、設定ファイルには影響しません。"
       },
       "options": {
         "proxyLayoutColumns": {

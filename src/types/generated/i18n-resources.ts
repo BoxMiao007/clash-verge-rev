@@ -788,6 +788,19 @@ export interface TranslationResources {
               hoverNavigatorDelay: string
             }
           }
+          speedtest: {
+            fields: {
+              speedtestDuration: string
+              speedtestMaxMb: string
+              speedtestUrl: string
+            }
+            title: string
+            tooltips: {
+              speedtestDuration: string
+              speedtestMaxMb: string
+              speedtestUrl: string
+            }
+          }
           theme: {
             actions: {
               editCss: string
@@ -1120,8 +1133,6 @@ export interface TranslationResources {
             autoLogClean: string
             defaultLatencyTest: string
             defaultLatencyTimeout: string
-            defaultSpeedtestDuration: string
-            defaultSpeedtestUrl: string
             enableBuiltinEnhanced: string
             proxyLayoutColumns: string
           }
@@ -1139,8 +1150,6 @@ export interface TranslationResources {
             autoCloseConnections: string
             autoDelayDetection: string
             defaultLatencyTest: string
-            defaultSpeedtestDuration: string
-            defaultSpeedtestUrl: string
             enableBuiltinEnhanced: string
           }
         }
@@ -1538,6 +1547,7 @@ export interface TranslationResources {
         files: string
         hours: string
         kilobytes: string
+        megabytes: string
         milliseconds: string
         minutes: string
         seconds: string

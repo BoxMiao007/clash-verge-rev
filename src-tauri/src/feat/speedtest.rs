@@ -33,6 +33,12 @@ const PORT_PROBE_ATTEMPTS: u16 = 16;
 const MIN_DURATION_SECS: u64 = 1;
 const MAX_DURATION_SECS: u64 = 30;
 
+/// 测速流量上限的合法区间(MB)。前端 `src/utils/speed.ts` 持有同一份界限做输入
+/// 夹取与解析归一(「两处同步」约定,同测速时长);此处换算为字节做服务端校验。
+const MB_BYTES: u64 = 1024 * 1024;
+const MIN_SPEEDTEST_MAX_MB: u64 = 1;
+const MAX_SPEEDTEST_MAX_MB: u64 = 1024;
+
 /// IPC 返回给前端的结构:与仓库约定一致用驼峰键(Tauri 不改写命令返回值的
 /// 字段名,前端按此契约读取,见下方契约测试)。
 #[derive(Debug, Clone, serde::Serialize)]
@@ -400,6 +406,22 @@ fn clamp_duration(duration_secs: u64) -> u64 {
     duration_secs.clamp(MIN_DURATION_SECS, MAX_DURATION_SECS)
 }
 
+/// 归一测速流量上限:返回 Some(字节) 为有效上限,None 为不限。
+///
+/// 未传、0、非法值(负数、非整数、越出 1–1024 MB)一律视为不限,与前端解析
+/// 语义一致(非法输入自动归一,坏配置不悄悄生效)。参数用 f64:前端 Number
+/// 无整数概念,反序列化成整数类型会让非整数值直接报错而非归一。
+fn normalize_max_bytes(max_bytes: Option<f64>) -> Option<u64> {
+    let max_bytes = max_bytes?;
+    if !max_bytes.is_finite() || max_bytes.fract() != 0.0 {
+        return None;
+    }
+    let bytes = max_bytes as i64;
+    let min = (MIN_SPEEDTEST_MAX_MB * MB_BYTES) as i64;
+    let max = (MAX_SPEEDTEST_MAX_MB * MB_BYTES) as i64;
+    (min..=max).contains(&bytes).then_some(bytes as u64)
+}
+
 /// 构建经专用 listener 端口转发的下载客户端。
 fn build_download_client(port: u16) -> Result<reqwest::Client> {
     let proxy = reqwest::Proxy::all(format!("http://127.0.0.1:{port}"))?;
@@ -409,11 +431,16 @@ fn build_download_client(port: u16) -> Result<reqwest::Client> {
         .build()?)
 }
 
-/// 限时下载:窗口内持续读取响应体,窗口耗尽或 EOF 即止。
+/// 限时下载:窗口内持续读取响应体,窗口耗尽、达到测速流量上限或 EOF 即止。
 ///
 /// 返回 (字节数, 实际用时)。连接失败、响应错误、传输中断均返回 Err;
-/// 窗口耗尽不是错误——已收到的字节参与计速。
-async fn timed_download(client: &reqwest::Client, url: &str, window: Duration) -> Result<(u64, Duration)> {
+/// 窗口耗尽与达标截断都不是错误——已收到的字节参与计速,按实际数据计。
+async fn timed_download(
+    client: &reqwest::Client,
+    url: &str,
+    window: Duration,
+    max_bytes: Option<u64>,
+) -> Result<(u64, Duration)> {
     let start = Instant::now();
     let deadline = tokio::time::Instant::from_std(start + window);
 
@@ -438,6 +465,11 @@ async fn timed_download(client: &reqwest::Client, url: &str, window: Duration) -
             Ok(chunk) => {
                 let Some(chunk) = chunk? else { break };
                 bytes += chunk.len() as u64;
+                // 达到流量上限:提前结束,不引入新的测量状态。末块可能略超上限,
+                // 按实际收到字节计速,不回写截断值。
+                if max_bytes.is_some_and(|cap| bytes >= cap) {
+                    break;
+                }
             }
         }
     }
@@ -446,9 +478,18 @@ async fn timed_download(client: &reqwest::Client, url: &str, window: Duration) -
 }
 
 /// 单节点下载测速:切换 GLOBAL → 限时下载 → 返回前无条件恢复 GLOBAL。
-pub async fn speedtest_node(name: String, url: String, duration_secs: u64) -> Result<SpeedTestResult> {
+///
+/// `max_bytes` 为可选的测速流量上限(前端由 MB 配置换算为字节传入);未传、0 或非法值
+/// 归一为不限,行为与无上限时完全一致。达到上限提前结束并按实际数据计速。
+pub async fn speedtest_node(
+    name: String,
+    url: String,
+    duration_secs: u64,
+    max_bytes: Option<f64>,
+) -> Result<SpeedTestResult> {
     validate_url(&url)?;
     let window = Duration::from_secs(clamp_duration(duration_secs));
+    let max_bytes = normalize_max_bytes(max_bytes);
 
     let runtime = Config::runtime().await;
     let data = runtime.data_arc();
@@ -465,7 +506,7 @@ pub async fn speedtest_node(name: String, url: String, duration_secs: u64) -> Re
         MihomoGlobalOps,
         &name,
         &journal_dir,
-        timed_download(&client, &url, window),
+        timed_download(&client, &url, window, max_bytes),
     )
     .await?;
 
@@ -565,6 +606,41 @@ mod tests {
         assert_eq!(value["bytes"], 1);
         assert_eq!(value["elapsedMs"], 2);
         assert_eq!(value["speedBps"], 3);
+    }
+
+    /// 归一语义的边界表:期望值用独立字面量(1MB = 1_048_576;1024MB = 1_073_741_824),
+    /// 不引用限界常量,避免与实现互证。
+    #[test]
+    fn normalize_max_bytes_treats_missing_zero_and_invalid_as_unlimited() {
+        assert_eq!(normalize_max_bytes(None), None, "未传即不限");
+        assert_eq!(normalize_max_bytes(Some(0.0)), None, "0 表示不限");
+        assert_eq!(normalize_max_bytes(Some(-1.0)), None, "负数归一为不限");
+        assert_eq!(normalize_max_bytes(Some(1.5)), None, "非整数归一为不限");
+        assert_eq!(
+            normalize_max_bytes(Some(1_048_575.0)),
+            None,
+            "不足 1MB 视为越界,归一为不限"
+        );
+        assert_eq!(
+            normalize_max_bytes(Some(1_073_741_825.0)),
+            None,
+            "超过 1024MB 视为越界,归一为不限"
+        );
+    }
+
+    #[test]
+    fn normalize_max_bytes_returns_byte_cap_for_legal_values() {
+        assert_eq!(normalize_max_bytes(Some(1_048_576.0)), Some(1_048_576), "1MB 下界");
+        assert_eq!(
+            normalize_max_bytes(Some(10_485_760.0)),
+            Some(10_485_760),
+            "区间内取 10MB"
+        );
+        assert_eq!(
+            normalize_max_bytes(Some(1_073_741_824.0)),
+            Some(1_073_741_824),
+            "1024MB 上界"
+        );
     }
 
     #[test]

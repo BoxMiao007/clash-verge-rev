@@ -55,6 +55,7 @@
     "minutes": "dakika",
     "hours": "saat",
     "kilobytes": "KB",
+    "megabytes": "MB",
     "files": "Dosya"
   },
   "placeholders": {

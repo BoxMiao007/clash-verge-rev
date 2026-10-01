@@ -179,6 +179,19 @@
           "hotkeySetting": "Configuración de atajos de teclado"
         }
       },
+      "speedtest": {
+        "title": "Prueba de velocidad",
+        "fields": {
+          "speedtestUrl": "URL de prueba de velocidad",
+          "speedtestDuration": "Duración de la prueba de velocidad",
+          "speedtestMaxMb": "Límite de datos de la prueba de velocidad"
+        },
+        "tooltips": {
+          "speedtestUrl": "URL del archivo de prueba que se descarga durante las pruebas de velocidad; déjelo vacío para usar el valor predeterminado integrado",
+          "speedtestDuration": "Ventana de descarga de cada prueba de velocidad, entre 1 y 30 segundos",
+          "speedtestMaxMb": "Cantidad máxima de datos descargados en cada prueba de velocidad, entre 1 y 1024 MB; al alcanzar el límite, la prueba termina antes, 0 para sin límite"
+        }
+      },
       "advanced": {
         "title": "Ajustes avanzados de Verge",
         "tooltips": {
@@ -415,17 +428,13 @@
         "autoDelayDetection": "Detección automática de latencia",
         "autoDelayDetectionInterval": "Intervalo de detección automática de latencia",
         "defaultLatencyTest": "Enlace de prueba de latencia predeterminado",
-        "defaultLatencyTimeout": "Tiempo de espera de la prueba de latencia",
-        "defaultSpeedtestUrl": "URL de prueba de velocidad",
-        "defaultSpeedtestDuration": "Duración de la prueba de velocidad"
+        "defaultLatencyTimeout": "Tiempo de espera de la prueba de latencia"
       },
       "tooltips": {
         "autoCloseConnections": "Cierra las conexiones establecidas cuando se cambia el nodo seleccionado en el grupo de proxy o el modo de proxy.",
         "enableBuiltinEnhanced": "Procesamiento de compatibilidad de archivos de configuración",
         "autoDelayDetection": "Prueba periódicamente la latencia del nodo actual en segundo plano",
-        "defaultLatencyTest": "Solo se utiliza para pruebas de solicitudes de clientes HTTP y no afectará al archivo de configuración.",
-        "defaultSpeedtestUrl": "URL del archivo de prueba que se descarga durante las pruebas de velocidad; déjelo vacío para usar el valor predeterminado integrado",
-        "defaultSpeedtestDuration": "Ventana de descarga de cada prueba de velocidad, entre 1 y 30 segundos"
+        "defaultLatencyTest": "Solo se utiliza para pruebas de solicitudes de clientes HTTP y no afectará al archivo de configuración."
       },
       "options": {
         "proxyLayoutColumns": {

@@ -179,6 +179,19 @@
           "hotkeySetting": "تنظیمات کلیدهای میانبر"
         }
       },
+      "speedtest": {
+        "title": "آزمون سرعت",
+        "fields": {
+          "speedtestUrl": "نشانی آزمون سرعت",
+          "speedtestDuration": "مدت آزمون سرعت",
+          "speedtestMaxMb": "حد داده آزمون سرعت"
+        },
+        "tooltips": {
+          "speedtestUrl": "نشانی پروندهٔ آزمایشی که در آزمون سرعت دانلود می‌شود؛ برای استفاده از مقدار پیش‌فرض داخلی خالی بگذارید",
+          "speedtestDuration": "مدت دانلود هر آزمون سرعت، بین ۱ تا ۳۰ ثانیه",
+          "speedtestMaxMb": "بیشینه داده‌ای که در هر آزمون سرعت دانلود می‌شود؛ با رسیدن به حد، آزمون زودتر پایان می‌یابد؛ ۰ یعنی بدون محدودیت، بازه ۱ تا ۱۰۲۴ مگابایت"
+        }
+      },
       "advanced": {
         "title": "تنظیمات پیشرفته Verge",
         "tooltips": {
@@ -415,17 +428,13 @@
         "autoDelayDetection": "تشخیص تأخیر خودکار",
         "autoDelayDetectionInterval": "فاصله تشخیص تأخیر خودکار",
         "defaultLatencyTest": "آزمون تأخیر پیش‌فرض",
-        "defaultLatencyTimeout": "زمان انتظار تأخیر پیش‌فرض",
-        "defaultSpeedtestUrl": "نشانی آزمون سرعت",
-        "defaultSpeedtestDuration": "مدت آزمون سرعت"
+        "defaultLatencyTimeout": "زمان انتظار تأخیر پیش‌فرض"
       },
       "tooltips": {
         "autoCloseConnections": "اتصالات برقرار شده را هنگام تغییر انتخاب گروه پروکسی یا حالت پروکسی خاتمه دهید",
         "enableBuiltinEnhanced": "مدیریت سازگاری برای فایل پیکربندی",
         "autoDelayDetection": "به‌صورت دوره‌ای تأخیر گره فعلی را در پس‌زمینه آزمایش می‌کند",
-        "defaultLatencyTest": "فقط برای تست درخواست‌های کلاینت HTTP استفاده می‌شود و بر فایل پیکربندی تأثیری نخواهد داشت",
-        "defaultSpeedtestUrl": "نشانی پروندهٔ آزمایشی که در آزمون سرعت دانلود می‌شود؛ برای استفاده از مقدار پیش‌فرض داخلی خالی بگذارید",
-        "defaultSpeedtestDuration": "مدت دانلود هر آزمون سرعت، بین ۱ تا ۳۰ ثانیه"
+        "defaultLatencyTest": "فقط برای تست درخواست‌های کلاینت HTTP استفاده می‌شود و بر فایل پیکربندی تأثیری نخواهد داشت"
       },
       "options": {
         "proxyLayoutColumns": {

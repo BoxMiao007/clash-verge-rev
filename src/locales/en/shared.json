@@ -55,6 +55,7 @@
     "minutes": "mins",
     "hours": "hrs",
     "kilobytes": "KB",
+    "megabytes": "MB",
     "files": "Files"
   },
   "placeholders": {

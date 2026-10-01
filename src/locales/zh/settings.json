@@ -179,6 +179,19 @@
           "hotkeySetting": "热键设置"
         }
       },
+      "speedtest": {
+        "title": "速度测试",
+        "fields": {
+          "speedtestUrl": "速度测试链接",
+          "speedtestDuration": "速度测试时长",
+          "speedtestMaxMb": "测速流量上限"
+        },
+        "tooltips": {
+          "speedtestUrl": "速度测试下载的测试文件地址，留空时使用内置默认值",
+          "speedtestDuration": "单次速度测试的下载时长，范围 1-30 秒",
+          "speedtestMaxMb": "单次测速允许下载的最大数据量，提前达到上限会提前结束；0 为不限，范围 1-1024 MB"
+        }
+      },
       "advanced": {
         "title": "Verge 高级设置",
         "tooltips": {
@@ -415,17 +428,13 @@
         "autoDelayDetection": "自动延迟检测",
         "autoDelayDetectionInterval": "自动延迟检测间隔",
         "defaultLatencyTest": "默认测试链接",
-        "defaultLatencyTimeout": "测试超时时间",
-        "defaultSpeedtestUrl": "速度测试链接",
-        "defaultSpeedtestDuration": "速度测试时长"
+        "defaultLatencyTimeout": "测试超时时间"
       },
       "tooltips": {
         "autoCloseConnections": "当代理组选中节点或代理模式变动时，关闭已建立的连接",
         "enableBuiltinEnhanced": "配置文件的兼容性处理",
         "autoDelayDetection": "后台定时检测当前节点延迟",
-        "defaultLatencyTest": "仅用于 HTTP 客户端请求测试，不会对配置文件产生影响",
-        "defaultSpeedtestUrl": "速度测试下载的测试文件地址，留空时使用内置默认值",
-        "defaultSpeedtestDuration": "单次速度测试的下载时长，范围 1-30 秒"
+        "defaultLatencyTest": "仅用于 HTTP 客户端请求测试，不会对配置文件产生影响"
       },
       "options": {
         "proxyLayoutColumns": {

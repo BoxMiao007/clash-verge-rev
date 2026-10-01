@@ -55,6 +55,7 @@
     "minutes": "минуты",
     "hours": "часы",
     "kilobytes": "КБ",
+    "megabytes": "МБ",
     "files": "Файлы"
   },
   "placeholders": {
