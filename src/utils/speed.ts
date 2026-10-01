@@ -129,8 +129,9 @@ export const resolveSpeedtestDurationSecs = (
 }
 
 /** 测速流量上限合法区间(MB):0 表示不限,1–1024 为有效上限。
- *  后端 src-tauri/src/feat/speedtest.rs 持有同一份界限做服务端校验,两处需同步修改。 */
-export const MIN_SPEEDTEST_MAX_MB = 1
+ *  后端 src-tauri/src/feat/speedtest.rs 持有同一份界限做服务端校验,两处需同步修改。
+ *  仅模块内使用不导出:界限随解析函数生效,外部无消费方。 */
+const MIN_SPEEDTEST_MAX_MB = 1
 export const MAX_SPEEDTEST_MAX_MB = 1024
 
 const BYTES_PER_MB = 1024 * 1024
