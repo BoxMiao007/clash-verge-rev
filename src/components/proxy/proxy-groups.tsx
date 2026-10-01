@@ -34,6 +34,7 @@ import {
 import { debugLog } from '@/utils/debug'
 import {
   resolveSpeedtestDurationSecs,
+  resolveSpeedtestMaxBytes,
   resolveSpeedtestUrl,
 } from '@/utils/speed'
 
@@ -113,6 +114,9 @@ function useProxyRenderState(
   const speedtestDurationSecs = resolveSpeedtestDurationSecs(
     verge?.default_speedtest_duration,
   )
+  const speedtestMaxBytes = resolveSpeedtestMaxBytes(
+    verge?.default_speedtest_max_mb,
+  )
 
   const handleCheckAll = useStableCallback(
     useLockFn(async (groupName: string) => {
@@ -177,6 +181,7 @@ function useProxyRenderState(
           groupName,
           speedtestUrl,
           speedtestDurationSecs,
+          speedtestMaxBytes,
         )
         debugLog(`[ProxyGroups] 速度测试完成，组: ${groupName}`)
       } catch (error) {

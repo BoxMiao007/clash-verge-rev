@@ -183,11 +183,13 @@
         "title": "速度テスト",
         "fields": {
           "speedtestUrl": "速度テストURL",
-          "speedtestDuration": "速度テスト時間"
+          "speedtestDuration": "速度テスト時間",
+          "speedtestMaxMb": "速度テストデータ上限"
         },
         "tooltips": {
           "speedtestUrl": "速度テストでダウンロードするテストファイルのURL。空欄の場合は内蔵のデフォルト値が使用されます",
-          "speedtestDuration": "1回の速度テストのダウンロード時間(1〜30秒)"
+          "speedtestDuration": "1回の速度テストのダウンロード時間(1〜30秒)",
+          "speedtestMaxMb": "1回の速度テストでダウンロードする最大データ量。上限に達するとテストは早めに終了します(0で無制限、1〜1024MB)"
         }
       },
       "advanced": {

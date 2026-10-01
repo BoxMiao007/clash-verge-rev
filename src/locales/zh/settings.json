@@ -183,11 +183,13 @@
         "title": "速度测试",
         "fields": {
           "speedtestUrl": "速度测试链接",
-          "speedtestDuration": "速度测试时长"
+          "speedtestDuration": "速度测试时长",
+          "speedtestMaxMb": "测速流量上限"
         },
         "tooltips": {
           "speedtestUrl": "速度测试下载的测试文件地址，留空时使用内置默认值",
-          "speedtestDuration": "单次速度测试的下载时长，范围 1-30 秒"
+          "speedtestDuration": "单次速度测试的下载时长，范围 1-30 秒",
+          "speedtestMaxMb": "单次测速允许下载的最大数据量，提前达到上限会提前结束；0 为不限，范围 1-1024 MB"
         }
       },
       "advanced": {

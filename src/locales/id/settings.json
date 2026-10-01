@@ -183,11 +183,13 @@
         "title": "Uji Kecepatan",
         "fields": {
           "speedtestUrl": "URL Uji Kecepatan",
-          "speedtestDuration": "Durasi Uji Kecepatan"
+          "speedtestDuration": "Durasi Uji Kecepatan",
+          "speedtestMaxMb": "Batas Data Uji Kecepatan"
         },
         "tooltips": {
           "speedtestUrl": "URL file uji yang diunduh saat uji kecepatan; biarkan kosong untuk menggunakan nilai bawaan",
-          "speedtestDuration": "Durasi unduhan setiap uji kecepatan, antara 1 dan 30 detik"
+          "speedtestDuration": "Durasi unduhan setiap uji kecepatan, antara 1 dan 30 detik",
+          "speedtestMaxMb": "Jumlah data maksimum yang diunduh per uji kecepatan, antara 1 dan 1024 MB; saat mencapai batas, pengujian berakhir lebih awal, 0 untuk tanpa batas"
         }
       },
       "advanced": {

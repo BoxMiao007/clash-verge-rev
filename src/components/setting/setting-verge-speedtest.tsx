@@ -11,6 +11,7 @@ import {
   MIN_SPEEDTEST_DURATION_SECS,
   clampSpeedtestDurationSecs,
   resolveSpeedtestDurationSecs,
+  resolveSpeedtestMaxMb,
 } from '@/utils/speed'
 
 import { GuardState } from './mods/guard-state'
@@ -24,7 +25,8 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
   const { t } = useTranslation()
 
   const { verge, patchVerge, mutateVerge } = useVerge()
-  const { default_speedtest_url, default_speedtest_duration } = verge ?? {}
+  const { default_speedtest_url, default_speedtest_duration, default_speedtest_max_mb } =
+    verge ?? {}
 
   // URL 为自由文本:输入过程只改草稿,失焦才落盘(空串回落内置默认值)。
   const [urlDraft, setUrlDraft] = useState<string | null>(null)
@@ -115,6 +117,50 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
                 endAdornment: (
                   <InputAdornment position="end">
                     {t('shared.units.seconds')}
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+        </GuardState>
+      </SettingItem>
+
+      <SettingItem
+        label={t('settings.components.verge.speedtest.fields.speedtestMaxMb')}
+        extra={
+          <TooltipIcon
+            title={t(
+              'settings.components.verge.speedtest.tooltips.speedtestMaxMb',
+            )}
+            sx={{ opacity: '0.7' }}
+          />
+        }
+      >
+        {/* 流量上限与时长同用即时夹取:0 是合法输入(不限),非法输入归 0。 */}
+        <GuardState
+          value={resolveSpeedtestMaxMb(default_speedtest_max_mb)}
+          onCatch={onError}
+          onFormat={(e: any) => {
+            const parsed = parseInt(e.target.value, 10)
+            return Number.isFinite(parsed) ? resolveSpeedtestMaxMb(parsed) : 0
+          }}
+          onChange={(e) => onChangeData({ default_speedtest_max_mb: e })}
+          onGuard={(e) => patchVerge({ default_speedtest_max_mb: e })}
+        >
+          <TextField
+            autoComplete="new-password"
+            size="small"
+            type="number"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            sx={{ width: 250 }}
+            placeholder="0"
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {t('shared.units.megabytes')}
                   </InputAdornment>
                 ),
               },

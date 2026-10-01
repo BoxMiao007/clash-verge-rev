@@ -126,6 +126,10 @@ pub struct IVerge {
 
     pub default_speedtest_duration: Option<u16>,
 
+    /// 测速流量上限(MB);0 或未配置表示不限,合法区间 1–1024,
+    /// 解析语义见前端 src/utils/speed.ts 与 feat/speedtest.rs(两处同步约定)。
+    pub default_speedtest_max_mb: Option<u16>,
+
     pub enable_auto_delay_detection: Option<bool>,
 
     /// 自动检测当前节点延迟的间隔（分钟）
@@ -478,6 +482,7 @@ impl IVerge {
         patch!(default_latency_timeout);
         patch!(default_speedtest_url);
         patch!(default_speedtest_duration);
+        patch!(default_speedtest_max_mb);
         patch!(enable_auto_delay_detection);
         patch!(auto_delay_detection_interval_minutes);
         patch!(enable_builtin_enhanced);

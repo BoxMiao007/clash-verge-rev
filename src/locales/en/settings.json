@@ -183,11 +183,13 @@
         "title": "Speed Test",
         "fields": {
           "speedtestUrl": "Speed Test URL",
-          "speedtestDuration": "Speed Test Duration"
+          "speedtestDuration": "Speed Test Duration",
+          "speedtestMaxMb": "Speed Test Data Cap"
         },
         "tooltips": {
           "speedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default",
-          "speedtestDuration": "Download window of each speed test, between 1 and 30 seconds"
+          "speedtestDuration": "Download window of each speed test, between 1 and 30 seconds",
+          "speedtestMaxMb": "Maximum data downloaded per speed test, between 1 and 1024 MB; reaching the cap ends the test early, 0 for unlimited"
         }
       },
       "advanced": {

@@ -932,6 +932,7 @@ interface IVergeConfig {
   default_latency_timeout?: number
   default_speedtest_url?: string
   default_speedtest_duration?: number
+  default_speedtest_max_mb?: number
   enable_auto_delay_detection?: boolean
   auto_delay_detection_interval_minutes?: number
   enable_builtin_enhanced?: boolean
