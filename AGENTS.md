@@ -45,6 +45,7 @@
 fork 正式版用 dev 上的 `fork-release.yml` 工作流发布:官方 identity、仅 Windows x64,tag 推送 `v*-fork.*` 自动触发。
 
 - tag 命名 `v<上游基线>-fork.<序号>`(如 `v2.5.7-fork.1`),在 dev 上打并推送;CI 内把应用版本盖成 build metadata 形式的 `2.5.7+fork.1`(`release-version.mjs` 只接受这种 fork 后缀),不污染 dev 版本号。
+- 上游同步合入新基线后即可出包:首个 tag 用 `v<新基线>-fork.1`,同一基线的后续重发递增序号(fork.2、fork.3…);是否随同步出包由维护者决定,不是同步的固定步骤。
 - 工作流文件必须存在于被发布 tag 的提交里:先合入 dev 再打 tag。
 - 重发同一 tag:`gh workflow run fork-release.yml --repo BoxMiao007/clash-verge-rev -f tag=v2.5.7-fork.1`。
 - 与官方版数据兼容(同 identity,覆盖安装不迁移数据);应用内更新已禁用(ADR-0002),升级 = 下载新安装包覆盖安装,「检查更新」按钮报错属预期。
