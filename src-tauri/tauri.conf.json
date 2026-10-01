@@ -30,6 +30,10 @@
   "productName": "Clash Verge",
   "identifier": "io.github.clash-verge-rev.clash-verge-rev",
   "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": []
+    },
     "deep-link": {
       "desktop": {
         "schemes": ["clash", "clash-verge"]
