@@ -334,12 +334,21 @@ function meowCore() {
 
 // meow 的压缩包把二进制放在 `meow-<版本>-<target>/` 一层目录下,与 mihomo 的扁平布局不同,
 // 单独走 extract + 递归查找,不复用 resolveSidecar 的扁平候选逻辑。
+// Windows zip 内另有 wintun.dll:TUN 驱动,meow 按自身所在目录搜索它,必须与 verge-meow.exe
+// 同目录。提取到 resources 目录随包分发,由 installer.nsi 在安装时挪到安装根(工单 08)。
 async function resolveMeowSidecar() {
   const { name, targetFile, exeFile, archiveFile, downloadURL } = meowCore()
   const sidecarPath = path.join(SIDECAR_DIR, targetFile)
+  // 只有 Windows zip 带 wintun.dll;Linux tar.gz 没有该文件(Linux TUN 不经 wintun)
+  const wintunTarget =
+    platform === 'win32' ? path.join(RESOURCES_DIR, 'wintun.dll') : null
   await fsp.mkdir(SIDECAR_DIR, { recursive: true })
 
-  if (!FORCE && fs.existsSync(sidecarPath)) {
+  if (
+    !FORCE &&
+    fs.existsSync(sidecarPath) &&
+    (!wintunTarget || fs.existsSync(wintunTarget))
+  ) {
     log_success(`"${name}" already exists, skipping download`)
     return
   }
@@ -363,9 +372,17 @@ async function resolveMeowSidecar() {
       throw new Error(`Expected binary ${exeFile} not found in ${tempDir}`)
     await fsp.rename(extracted, sidecarPath)
     if (platform !== 'win32') await fsp.chmod(sidecarPath, 0o755)
+    if (wintunTarget) {
+      const wintun = await findExtractedFile(tempDir, 'wintun.dll')
+      if (!wintun) throw new Error(`Expected wintun.dll not found in ${tempDir}`)
+      await fsp.mkdir(RESOURCES_DIR, { recursive: true })
+      await fsp.rename(wintun, wintunTarget)
+      log_success(`meow wintun.dll extracted: "${wintunTarget}"`)
+    }
     log_success(`meow sidecar finished: "${targetFile}"`)
   } catch (err) {
     await fsp.rm(sidecarPath, { recursive: true, force: true })
+    if (wintunTarget) await fsp.rm(wintunTarget, { force: true })
     throw err
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true })
