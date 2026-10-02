@@ -298,6 +298,80 @@ function clashMeta() {
   }
 }
 
+// meow-rs 内核(工单 02):版本钉位在 package.json 的 meowCoreVersion,
+// dev prebuild 与 CI(工单 08)读同一个值;二进制不进 git(src-tauri/.gitignore)。
+const MEOW_VERSION = (() => {
+  const pkg = JSON.parse(
+    fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'),
+  )
+  const version = pkg.meowCoreVersion
+  if (!version)
+    throw new Error('package.json is missing the meowCoreVersion pin')
+  return version
+})()
+
+// fork 只发 Windows x64;Linux 侧仅用于开发自测,统一取 musl 静态二进制(可在 glibc 主机直接运行)。
+const MEOW_ASSET_TARGETS = {
+  'x86_64-pc-windows-msvc': 'x86_64-pc-windows-msvc',
+  'x86_64-unknown-linux-gnu': 'x86_64-unknown-linux-musl',
+}
+
+function meowCore() {
+  const assetTarget = MEOW_ASSET_TARGETS[SIDECAR_HOST]
+  if (!assetTarget) {
+    throw new Error(`meow core unsupported host "${SIDECAR_HOST}"`)
+  }
+  const isWin = platform === 'win32'
+  const archiveFile = `meow-${MEOW_VERSION}-${assetTarget}.${isWin ? 'zip' : 'tar.gz'}`
+  return {
+    name: 'verge-meow',
+    targetFile: `verge-meow-${SIDECAR_HOST}${isWin ? '.exe' : ''}`,
+    exeFile: `meow${isWin ? '.exe' : ''}`,
+    archiveFile,
+    downloadURL: `https://github.com/meow-rs/meow-rs/releases/download/${MEOW_VERSION}/${archiveFile}`,
+  }
+}
+
+// meow 的压缩包把二进制放在 `meow-<版本>-<target>/` 一层目录下,与 mihomo 的扁平布局不同,
+// 单独走 extract + 递归查找,不复用 resolveSidecar 的扁平候选逻辑。
+async function resolveMeowSidecar() {
+  const { name, targetFile, exeFile, archiveFile, downloadURL } = meowCore()
+  const sidecarPath = path.join(SIDECAR_DIR, targetFile)
+  await fsp.mkdir(SIDECAR_DIR, { recursive: true })
+
+  if (!FORCE && fs.existsSync(sidecarPath)) {
+    log_success(`"${name}" already exists, skipping download`)
+    return
+  }
+
+  const tempDir = path.join(TEMP_DIR, name)
+  const tempArchive = path.join(tempDir, archiveFile)
+  await fsp.mkdir(tempDir, { recursive: true })
+
+  try {
+    if (!fs.existsSync(tempArchive)) {
+      await downloadFile(downloadURL, tempArchive)
+    }
+    if (archiveFile.endsWith('.zip')) {
+      const zip = new AdmZip(tempArchive)
+      zip.extractAllTo(tempDir, true)
+    } else {
+      await extract({ cwd: tempDir, file: tempArchive })
+    }
+    const extracted = await findExtractedFile(tempDir, exeFile)
+    if (!extracted)
+      throw new Error(`Expected binary ${exeFile} not found in ${tempDir}`)
+    await fsp.rename(extracted, sidecarPath)
+    if (platform !== 'win32') await fsp.chmod(sidecarPath, 0o755)
+    log_success(`meow sidecar finished: "${targetFile}"`)
+  } catch (err) {
+    await fsp.rm(sidecarPath, { recursive: true, force: true })
+    throw err
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true })
+  }
+}
+
 async function downloadFile(url, outPath) {
   const options = {}
   const httpProxy =
@@ -740,6 +814,11 @@ const tasks = [
     name: 'verge-mihomo',
     func: () =>
       getLatestReleaseVersion().then(() => resolveSidecar(clashMeta())),
+    retry: 5,
+  },
+  {
+    name: 'verge-meow',
+    func: resolveMeowSidecar,
     retry: 5,
   },
   // After both sidecar tasks: it hashes what they downloaded.

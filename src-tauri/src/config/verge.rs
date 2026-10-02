@@ -243,7 +243,14 @@ pub struct IVergeTheme {
 }
 
 impl IVerge {
-    pub const VALID_CLASH_CORES: &'static [&'static str] = &["verge-mihomo", "verge-mihomo-alpha"];
+    // verge-meow 为 meow-rs 平级第二内核(工单 02);sidecar 名与配置取值共用同一前缀惯例。
+    pub const VALID_CLASH_CORES: &'static [&'static str] = &["verge-mihomo", "verge-mihomo-alpha", "verge-meow"];
+
+    /// meow 内核判定:meow 不支持 mihomo 系的 IPC external-controller,
+    /// sidecar 下 API 只能走 TCP。内核差异分流的单一事实源,后续工单在此扩展。
+    pub fn is_meow_core(core: &str) -> bool {
+        core == "verge-meow"
+    }
 
     pub async fn validate_and_fix_config() -> Result<()> {
         let config_path = dirs::verge_path()?;
@@ -521,5 +528,22 @@ impl IVerge {
         } else {
             LevelFilter::Info
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IVerge;
+
+    /// 工单 02:meow-rs 作为平级第二内核进入同一份校验清单;
+    /// 未知取值仍被拒,防止任意字符串流入 sidecar 名与启动参数。
+    #[test]
+    fn meow_is_a_valid_core_while_unknown_values_stay_rejected() {
+        assert!(IVerge::VALID_CLASH_CORES.contains(&"verge-meow"));
+        assert!(IVerge::is_meow_core("verge-meow"));
+        // mihomo 系必须走各自的分支,不能被 meow 判定吞掉。
+        assert!(!IVerge::is_meow_core("verge-mihomo"));
+        assert!(!IVerge::is_meow_core("verge-mihomo-alpha"));
+        assert!(!IVerge::is_meow_core("meow"));
     }
 }

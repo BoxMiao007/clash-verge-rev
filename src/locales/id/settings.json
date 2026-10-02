@@ -314,7 +314,8 @@
     "clashCore": {
       "variants": {
         "release": "Versi Rilis",
-        "alpha": "Versi Alpha"
+        "alpha": "Versi Alpha",
+        "meow": "Versi Ringan"
       }
     },
     "liteMode": {

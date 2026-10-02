@@ -314,7 +314,8 @@
     "clashCore": {
       "variants": {
         "release": "Versión estable",
-        "alpha": "Versión alfa"
+        "alpha": "Versión alfa",
+        "meow": "Versión ligera"
       }
     },
     "liteMode": {

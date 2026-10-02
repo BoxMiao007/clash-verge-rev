@@ -34,6 +34,11 @@ const VALID_CORE = [
     core: 'verge-mihomo-alpha',
     chipKey: 'settings.modals.clashCore.variants.alpha',
   },
+  {
+    name: 'Meow',
+    core: 'verge-meow',
+    chipKey: 'settings.modals.clashCore.variants.meow',
+  },
 ]
 
 export function ClashCoreViewer({ ref }: { ref?: Ref<DialogRef> }) {

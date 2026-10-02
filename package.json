@@ -1,6 +1,7 @@
 {
   "name": "clash-verge",
   "version": "2.5.7",
+  "meowCoreVersion": "v0.21.2",
   "license": "GPL-3.0-only",
   "scripts": {
     "prepare": "husky || true",

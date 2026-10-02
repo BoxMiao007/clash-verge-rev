@@ -314,7 +314,8 @@
     "clashCore": {
       "variants": {
         "release": "正式版",
-        "alpha": "预览版"
+        "alpha": "预览版",
+        "meow": "轻量版"
       }
     },
     "liteMode": {

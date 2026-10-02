@@ -2,6 +2,7 @@ import { useLockFn } from 'ahooks'
 import i18n from 'i18next'
 import { getVersion } from 'tauri-plugin-mihomo-api'
 
+import { useVerge } from '@/hooks/use-verge'
 import {
   getClashInfo,
   getClashMode,
@@ -85,6 +86,7 @@ export const useClashMode = (shouldFetch: boolean = true) => {
 }
 
 export const useClash = () => {
+  const { verge } = useVerge()
   const { data: clash, refetch } = useRuntimeConfig()
 
   const { data: versionData, refetch: mutateVersion } = useQuery({
@@ -108,8 +110,10 @@ export const useClash = () => {
     mutateClash()
   })
 
+  // meow 与 mihomo 同样返回 meta:true(mihomo 兼容标记),后缀按当前内核取名而非写死。
+  const coreLabel = verge?.clash_core === 'verge-meow' ? 'Meow' : 'Mihomo'
   const version = versionData?.meta
-    ? `${versionData.version} Mihomo`
+    ? `${versionData.version} ${coreLabel}`
     : versionData?.version || '-'
 
   return {

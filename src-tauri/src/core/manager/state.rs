@@ -34,6 +34,112 @@ fn sidecar_config_without_tun(yaml: &str) -> Result<std::string::String> {
 
 const SIDECAR_READINESS_ATTEMPTS: usize = 30;
 
+/// sidecar 启动时的 API 传输形态,按内核分流(工单 02):
+/// mihomo 系监听 IPC socket(无 TCP 暴露);meow 只支持 TCP external-controller,
+/// 地址复用 verge 的 `external-controller` 设置,密钥随行走 Bearer/`?token=`。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum SidecarApiTransport {
+    IpcSocket {
+        path: std::string::String,
+    },
+    Tcp {
+        host: std::string::String,
+        port: u16,
+        secret: Option<std::string::String>,
+    },
+}
+
+pub(super) fn sidecar_api_transport(
+    core: &str,
+    ipc_path: &str,
+    tcp_controller: &str,
+    secret: Option<&str>,
+) -> anyhow::Result<SidecarApiTransport> {
+    if crate::config::IVerge::is_meow_core(core) {
+        let addr: std::net::SocketAddr = tcp_controller.parse().map_err(|error| {
+            anyhow::anyhow!(
+                "meow core requires a parsable external-controller address, got {tcp_controller:?}: {error}"
+            )
+        })?;
+        return Ok(SidecarApiTransport::Tcp {
+            host: addr.ip().to_string(),
+            port: addr.port(),
+            secret: secret.filter(|s| !s.is_empty()).map(Into::into),
+        });
+    }
+    Ok(SidecarApiTransport::IpcSocket { path: ipc_path.into() })
+}
+
+/// 把 sidecar 的传输形态同步到 mihomo API 客户端。两个分支都显式设置协议,
+/// 防止上一次会话(可能是 meow 的 TCP)遗留的协议状态泄漏进本次启动。
+fn apply_api_transport(transport: &SidecarApiTransport) -> Result<()> {
+    let mihomo = handle::Handle::app_handle().mihomo();
+    match transport {
+        SidecarApiTransport::IpcSocket { path } => {
+            mihomo.update_protocol(tauri_plugin_mihomo::models::Protocol::LocalSocket)?;
+            mihomo.update_socket_path(path.to_owned())?;
+        }
+        SidecarApiTransport::Tcp { host, port, secret } => {
+            mihomo.update_protocol(tauri_plugin_mihomo::models::Protocol::Http)?;
+            mihomo.update_external_host(Some(host));
+            mihomo.update_external_port(Some(*port));
+            mihomo.update_secret(secret.as_deref());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod sidecar_transport_tests {
+    use super::{SidecarApiTransport, sidecar_api_transport};
+
+    /// 工单 02:mihomo 系 sidecar 继续走 IPC socket,不受 meow 引入的 TCP 分流影响。
+    #[test]
+    fn sidecar_api_transport_routes_mihomo_through_ipc() {
+        for core in ["verge-mihomo", "verge-mihomo-alpha"] {
+            assert_eq!(
+                sidecar_api_transport(core, "/ipc.sock", "127.0.0.1:9097", Some("s")).expect("mihomo transport"),
+                SidecarApiTransport::IpcSocket {
+                    path: "/ipc.sock".into()
+                }
+            );
+        }
+    }
+
+    /// meow 只有 TCP external-controller:地址取自 verge 的 external-controller 设置,
+    /// 密钥随行;空密钥按未配置处理,不能把空字符串当鉴权头发出去。
+    #[test]
+    fn meow_sidecar_runs_on_tcp_and_carries_the_secret() {
+        assert_eq!(
+            sidecar_api_transport("verge-meow", "/ipc.sock", "127.0.0.1:9097", Some("secret-1"))
+                .expect("meow transport"),
+            SidecarApiTransport::Tcp {
+                host: "127.0.0.1".into(),
+                port: 9097,
+                secret: Some("secret-1".into()),
+            }
+        );
+        assert!(
+            matches!(
+                sidecar_api_transport("verge-meow", "/ipc.sock", "127.0.0.1:9097", Some("")),
+                Ok(SidecarApiTransport::Tcp { secret: None, .. })
+            ),
+            "empty secret must degrade to unauthenticated, not an empty bearer token"
+        );
+    }
+
+    /// meow 没有 IPC 后备:地址坏掉就该在切换前失败并走回滚,而不是起一个摸不到 API 的内核。
+    #[test]
+    fn meow_sidecar_without_a_usable_controller_fails_fast() {
+        for addr in ["", "not-an-addr"] {
+            assert!(
+                sidecar_api_transport("verge-meow", "/ipc.sock", addr, None).is_err(),
+                "controller address {addr:?} must be rejected"
+            );
+        }
+    }
+}
+
 #[cfg(target_os = "windows")]
 async fn retry_service_start<Start, StartFuture>(
     attempts: usize,
@@ -162,9 +268,15 @@ impl CoreManager {
         self.core_stopped();
 
         let sidecar_ipc = dirs::sidecar_ipc_path()?;
-        handle::Handle::app_handle()
-            .mihomo()
-            .update_socket_path(dirs::path_to_str(&sidecar_ipc)?.to_owned())?;
+        let clash_core = Config::verge().await.latest_arc().get_valid_clash_core();
+        let clash_info = Config::clash().await.data_arc().get_client_info();
+        let transport = sidecar_api_transport(
+            clash_core.as_str(),
+            dirs::path_to_str(&sidecar_ipc)?,
+            &clash_info.server,
+            clash_info.secret.as_deref(),
+        )?;
+        apply_api_transport(&transport)?;
         #[cfg(target_os = "windows")]
         let config_file = if crate::core::runstate::RUN_STATE.state().is_admin {
             Config::generate_file().await?
@@ -176,7 +288,6 @@ impl CoreManager {
         #[cfg(not(target_os = "windows"))]
         let config_file = Config::generate_file().await?;
         let app_handle = handle::Handle::app_handle();
-        let clash_core = Config::verge().await.latest_arc().get_valid_clash_core();
         let config_dir = dirs::app_home_dir()?;
         #[cfg(unix)]
         discard_unwritable_core_cache(&config_dir);
@@ -187,18 +298,38 @@ impl CoreManager {
             .shell()
             .sidecar(clash_core.as_str())
             .map_err(|error| anyhow::anyhow!("failed to build sidecar command for core {clash_core:?}: {error:#}"))?;
-        let command = command.args([
-            "-d",
-            dirs::path_to_str(&config_dir)?,
-            "-f",
-            dirs::path_to_str(&config_file)?,
-            if cfg!(windows) {
-                "-ext-ctl-pipe"
-            } else {
-                "-ext-ctl-unix"
-            },
-            dirs::path_to_str(&sidecar_ipc)?,
-        ]);
+        let mut args: Vec<std::string::String> = [
+            "-d".to_owned(),
+            dirs::path_to_str(&config_dir)?.to_owned(),
+            "-f".to_owned(),
+            dirs::path_to_str(&config_file)?.to_owned(),
+        ]
+        .into_iter()
+        .collect();
+        match &transport {
+            SidecarApiTransport::IpcSocket { path } => {
+                args.push(
+                    if cfg!(windows) {
+                        "-ext-ctl-pipe"
+                    } else {
+                        "-ext-ctl-unix"
+                    }
+                    .to_owned(),
+                );
+                args.push(path.clone());
+            }
+            // meow 不支持 IPC external-controller,用 CLI override 强制 TCP 监听,
+            // 不受运行时配置里 external-controller 被禁用(置空)的影响。
+            SidecarApiTransport::Tcp { host, port, secret } => {
+                args.push("--ext-ctl".to_owned());
+                args.push(format!("{host}:{port}"));
+                if let Some(secret) = secret {
+                    args.push("--secret".to_owned());
+                    args.push(secret.clone());
+                }
+            }
+        }
+        let command = command.args(args);
         #[cfg(windows)]
         let command = command.env(
             "LISTEN_NAMEDPIPE_SDDL",
@@ -345,6 +476,10 @@ impl CoreManager {
         self.core_starting();
         let service_ipc = dirs::ipc_path()?;
         let config_file = Config::generate_file().await?;
+        // 服务模式恒走 IPC socket;显式复位,防止 meow sidecar 会话遗留的 Http 协议泄漏进来。
+        handle::Handle::app_handle()
+            .mihomo()
+            .update_protocol(tauri_plugin_mihomo::models::Protocol::LocalSocket)?;
         handle::Handle::app_handle()
             .mihomo()
             .update_socket_path(dirs::path_to_str(&service_ipc)?.to_owned())?;

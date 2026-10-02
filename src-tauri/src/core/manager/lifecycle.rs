@@ -759,14 +759,36 @@ impl CoreManager {
             anyhow::bail!("invalid clash core: {clash_core}");
         }
 
+        let previous = Config::verge().await.latest_arc().get_valid_clash_core();
+        self.persist_clash_core(clash_core).await?;
+
+        // 新内核配置校验不过时,运行中的内核与其配置都未被动过;把设置回滚到原内核,
+        // 避免留下「下次启动必然失败」的持久化状态(工单 02:切换失败自动回滚)。
+        if let Err(error) = self.update_config_checked().await {
+            logging!(
+                error,
+                Type::Core,
+                "core switch to {clash_core} failed validation, rolling back to {previous}: {error:#}"
+            );
+            if let Err(rollback_error) = self.persist_clash_core(&previous).await {
+                logging!(error, Type::Core, "rollback persistence failed: {rollback_error:#}");
+                return Err(anyhow::anyhow!("{error:#}; rollback also failed: {rollback_error:#}"));
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    async fn persist_clash_core(&self, clash_core: &str) -> Result<()> {
+        use smartstring::alias::String as SmartString;
         Config::verge().await.edit_draft(|d| {
-            d.clash_core = Some(clash_core.to_owned());
+            d.clash_core = Some(SmartString::from(clash_core));
         });
         Config::verge().await.apply();
 
         let verge_data = Config::verge().await.latest_arc();
         verge_data.save_file().await?;
-        self.update_config_checked().await
+        Ok(())
     }
 
     async fn prepare_startup(&self) -> StartupDecision {

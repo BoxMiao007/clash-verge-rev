@@ -958,6 +958,7 @@ export interface TranslationResources {
         clashCore: {
           variants: {
             alpha: string
+            meow: string
             release: string
           }
         }

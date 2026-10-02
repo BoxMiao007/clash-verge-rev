@@ -314,7 +314,8 @@
     "clashCore": {
       "variants": {
         "release": "نسخه نهایی",
-        "alpha": "نسخه آلفا"
+        "alpha": "نسخه آلفا",
+        "meow": "نسخه سبک"
       }
     },
     "liteMode": {

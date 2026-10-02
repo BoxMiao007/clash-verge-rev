@@ -314,7 +314,8 @@
     "clashCore": {
       "variants": {
         "release": "Kararlı Sürüm",
-        "alpha": "Alfa Sürümü"
+        "alpha": "Alfa Sürümü",
+        "meow": "Hafif Sürüm"
       }
     },
     "liteMode": {
