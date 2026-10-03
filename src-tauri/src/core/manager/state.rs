@@ -70,6 +70,19 @@ pub(super) fn sidecar_api_transport(
     Ok(SidecarApiTransport::IpcSocket { path: ipc_path.into() })
 }
 
+/// 服务模式启动内核时的 API 传输形态(工单 04),与 sidecar 路径共用同一份
+/// 内核分流事实(工单 02):mihomo 系指向服务托管的 IPC socket,meow 只有
+/// TCP external-controller。服务模式因此不再无条件复位为 LocalSocket——
+/// meow 没有 IPC 控制器,复位会让客户端指向一条永远不会出现的 pipe。
+fn service_api_transport(
+    core: &str,
+    service_ipc: &str,
+    tcp_controller: &str,
+    secret: Option<&str>,
+) -> anyhow::Result<SidecarApiTransport> {
+    sidecar_api_transport(core, service_ipc, tcp_controller, secret)
+}
+
 /// 把 sidecar 的传输形态同步到 mihomo API 客户端。两个分支都显式设置协议,
 /// 防止上一次会话(可能是 meow 的 TCP)遗留的协议状态泄漏进本次启动。
 fn apply_api_transport(transport: &SidecarApiTransport) -> Result<()> {
@@ -91,7 +104,7 @@ fn apply_api_transport(transport: &SidecarApiTransport) -> Result<()> {
 
 #[cfg(test)]
 mod sidecar_transport_tests {
-    use super::{SidecarApiTransport, sidecar_api_transport};
+    use super::{SidecarApiTransport, service_api_transport, sidecar_api_transport};
 
     /// 工单 02:mihomo 系 sidecar 继续走 IPC socket,不受 meow 引入的 TCP 分流影响。
     #[test]
@@ -137,6 +150,37 @@ mod sidecar_transport_tests {
                 "controller address {addr:?} must be rejected"
             );
         }
+    }
+
+    /// 工单 04:服务模式下 mihomo 系仍指向服务托管的 IPC socket(与 sidecar 路径
+    /// 的 sidecar IPC 不同,启动前由调用方选对路径参数)。
+    #[test]
+    fn service_mode_keeps_mihomo_on_the_service_ipc_socket() {
+        for core in ["verge-mihomo", "verge-mihomo-alpha"] {
+            assert_eq!(
+                service_api_transport(core, "/service/core.sock", "127.0.0.1:9097", Some("s"))
+                    .expect("mihomo service transport"),
+                SidecarApiTransport::IpcSocket {
+                    path: "/service/core.sock".into()
+                }
+            );
+        }
+    }
+
+    /// 工单 04:服务模式对 meow 不再无条件复位为 LocalSocket——meow 没有 IPC
+    /// 控制器,复位会让客户端指向一条永远不会出现的 pipe;API 走 TCP,
+    /// 与 sidecar 路径共用同一份内核分流事实。
+    #[test]
+    fn service_mode_runs_meow_on_tcp_not_the_service_pipe() {
+        assert_eq!(
+            service_api_transport("verge-meow", "/service/core.sock", "127.0.0.1:9097", Some("secret-1"))
+                .expect("meow service transport"),
+            SidecarApiTransport::Tcp {
+                host: "127.0.0.1".into(),
+                port: 9097,
+                secret: Some("secret-1".into()),
+            }
+        );
     }
 }
 
@@ -515,13 +559,28 @@ impl CoreManager {
         self.core_starting();
         let service_ipc = dirs::ipc_path()?;
         let config_file = Config::generate_file().await?;
-        // 服务模式恒走 IPC socket;显式复位,防止 meow sidecar 会话遗留的 Http 协议泄漏进来。
-        handle::Handle::app_handle()
-            .mihomo()
-            .update_protocol(tauri_plugin_mihomo::models::Protocol::LocalSocket)?;
-        handle::Handle::app_handle()
-            .mihomo()
-            .update_socket_path(dirs::path_to_str(&service_ipc)?.to_owned())?;
+        let clash_core = Config::verge().await.latest_arc().get_valid_clash_core();
+        let clash_info = Config::clash().await.data_arc().get_client_info();
+        let transport = service_api_transport(
+            clash_core.as_str(),
+            dirs::path_to_str(&service_ipc)?,
+            &clash_info.server,
+            clash_info.secret.as_deref(),
+        )?;
+        // 两个分支都显式设置协议:防止上一个会话(可能是 meow sidecar 的 TCP)的
+        // 传输形态泄漏进本次服务启动,同时 mihomo 仍指向服务的 IPC socket。
+        apply_api_transport(&transport)?;
+        // meow 的 API 监听是 TCP,服务交接(如 meow sidecar → 服务托管)同样要给
+        // 旧内核的 TIME_WAIT 留端口释放窗口;超时照常启动,让服务侧启动结果兜底。
+        if let SidecarApiTransport::Tcp { host, port, .. } = &transport
+            && !wait_for_tcp_port_bindable(host, *port, EXT_CTL_PORT_WAIT_TIMEOUT, EXT_CTL_PORT_WAIT_INTERVAL).await
+        {
+            logging!(
+                warn,
+                Type::Core,
+                "ext-ctl port {host}:{port} is still not bindable before the service start; starting anyway"
+            );
+        }
 
         self.start_core_by_service_with_config(&config_file).await
     }
