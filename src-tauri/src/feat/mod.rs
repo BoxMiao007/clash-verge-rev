@@ -1,6 +1,7 @@
 mod backup;
 mod clash;
 mod config;
+mod core_patch;
 mod core_upgrade;
 mod dns;
 mod geo_update;
@@ -16,6 +17,7 @@ mod window;
 pub use backup::*;
 pub use clash::*;
 pub use config::*;
+pub use core_patch::*;
 pub use core_upgrade::*;
 pub use dns::*;
 pub use geo_update::*;

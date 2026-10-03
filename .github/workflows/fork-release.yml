@@ -53,7 +53,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download sidecar (mihomo)
+      # prebuild 按 package.json 顶层 meowCoreVersion 一并下载 meow.exe + wintun.dll
+      - name: Download sidecars (mihomo, meow)
         run: pnpm run prebuild x86_64-pc-windows-msvc
 
       # 仓库是 workspace 布局,target 目录在仓库根;固定 key + 强制保存,跨 tag 复用缓存
