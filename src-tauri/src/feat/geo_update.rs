@@ -7,12 +7,9 @@
 use crate::{
     config::{Config, IVerge},
     core::CoreManager,
-    utils::{
-        dirs,
-        network::{NetworkManager, ProxyType},
-    },
+    utils::dirs,
 };
-use anyhow::{Context as _, Result, anyhow};
+use anyhow::{Context as _, Result};
 use clash_verge_logging::{Type, logging};
 use std::path::PathBuf;
 
@@ -93,26 +90,10 @@ fn replace_staged_files(staged: &[(PathBuf, PathBuf)]) -> Result<()> {
     Ok(())
 }
 
-/// 与内核升级同一条代理链(Localhost → System → None),保证仅经代理可达 GitHub 时仍可更新。
+/// GEO 文件与内核升级共用逐出口探测下载(缘由见 `proxy_download`),仅超时与体积上限不同。
 async fn download_via_proxies(url: &str) -> Result<Vec<u8>> {
-    let mut last_error = None;
-    for proxy in [ProxyType::Localhost, ProxyType::System, ProxyType::None] {
-        match NetworkManager::new()
-            .get_bytes(url, proxy, Some(GEO_DOWNLOAD_TIMEOUT_SECS), MAX_GEO_FILE_BYTES)
-            .await
-        {
-            Ok(bytes) => return Ok(bytes),
-            Err(error) => {
-                logging!(
-                    debug,
-                    Type::Core,
-                    "meow GEO 更新: 经 {proxy:?} 下载 {url} 失败: {error:#}"
-                );
-                last_error = Some(error.context(format!("{proxy:?} could not download {url}")));
-            }
-        }
-    }
-    Err(last_error.unwrap_or_else(|| anyhow!("failed to download {url}")))
+    super::proxy_download::download_via_proxies(url, GEO_DOWNLOAD_TIMEOUT_SECS, MAX_GEO_FILE_BYTES, "meow GEO 更新")
+        .await
 }
 
 #[cfg(test)]

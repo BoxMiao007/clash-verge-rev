@@ -402,28 +402,13 @@ fn meow_package_url(version: &str) -> Result<std::string::String> {
     ))
 }
 
-/// 逐出口探测下载,不复用版本解析的出口:api.github.com 与 release-assets 走不同域名,
-/// 不同出口对各域名的可达性可能不同(实测同一时刻代理出口被 API 限流、直连可达 API 但
-/// 达不到资产下载域),复用解析出口会把可用的下载路线挡在门外。与 geo_update 的
-/// `download_via_proxies` 同一策略(工单 06 实测)。
+/// meow 包下载与 GEO 更新共用逐出口探测通道(缘由见 `proxy_download`);包体积上限
+/// 与超时沿用 mihomo 包下载的同一组常量。
 async fn download_meow_package(version: &str) -> Result<Vec<u8>> {
     let url = meow_package_url(version)?;
     logging!(info, Type::Core, "内核升级: 下载 {url}");
 
-    let mut last_error = None;
-    for proxy in [ProxyType::Localhost, ProxyType::System, ProxyType::None] {
-        match NetworkManager::new()
-            .get_bytes(&url, proxy, Some(PACKAGE_TIMEOUT_SECS), MAX_PACKAGE_BYTES)
-            .await
-        {
-            Ok(bytes) => return Ok(bytes),
-            Err(error) => {
-                logging!(debug, Type::Core, "内核升级: 经 {proxy:?} 下载 {url} 失败: {error:#}");
-                last_error = Some(error.context(format!("{proxy:?} could not download {url}")));
-            }
-        }
-    }
-    Err(last_error.unwrap_or_else(|| anyhow!("failed to download {url}")))
+    super::proxy_download::download_via_proxies(&url, PACKAGE_TIMEOUT_SECS, MAX_PACKAGE_BYTES, "内核升级").await
 }
 
 /// A staged core that is removed unless publishing renamed it away.

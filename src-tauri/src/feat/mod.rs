@@ -9,6 +9,7 @@ mod icon;
 mod listener;
 mod profile;
 mod proxy;
+mod proxy_download;
 mod speedtest;
 mod tun;
 mod window;
