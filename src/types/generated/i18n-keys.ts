@@ -3,6 +3,7 @@
 
 export const translationKeys = [
   'connections.page.title',
+  'connections.page.notices.udpUnavailable',
   'connections.components.fields.host',
   'connections.components.fields.dlSpeed',
   'connections.components.fields.ulSpeed',
@@ -355,6 +356,7 @@ export const translationKeys = [
   'rules.page.provider.actions.updateAll',
   'rules.page.provider.actions.update',
   'rules.page.title',
+  'rules.page.notices.hitCountUnavailable',
   'rules.feedback.notifications.provider.updateSuccess',
   'rules.feedback.notifications.provider.updateFailed',
   'rules.feedback.notifications.provider.genericError',

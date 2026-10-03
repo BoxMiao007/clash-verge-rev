@@ -1,6 +1,9 @@
 {
   "page": {
-    "title": "Connections"
+    "title": "Connections",
+    "notices": {
+      "udpUnavailable": "The {{core}} kernel does not track UDP connections, so only TCP sessions are listed. This is a kernel capability difference, not a malfunction."
+    }
   },
   "components": {
     "fields": {

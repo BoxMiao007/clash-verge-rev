@@ -34,6 +34,9 @@ export interface TranslationResources {
         }
       }
       page: {
+        notices: {
+          udpUnavailable: string
+        }
         title: string
       }
     }
@@ -678,6 +681,9 @@ export interface TranslationResources {
         }
       }
       page: {
+        notices: {
+          hitCountUnavailable: string
+        }
         provider: {
           actions: {
             update: string

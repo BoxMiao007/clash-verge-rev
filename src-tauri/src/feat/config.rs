@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, IVerge},
-    core::{CoreManager, autostart, handle, hotkey, logger, proxy_control, tray},
+    core::{CoreManager, autostart, capability::CoreCapabilities, handle, hotkey, logger, proxy_control, tray},
     module::{auto_backup::AutoBackupManager, lightweight},
 };
 use anyhow::Result;
@@ -17,6 +17,10 @@ pub async fn patch_clash(patch: &Mapping) -> Result<()> {
     let res = {
         // 激活订阅
         if patch.get("secret").is_some() || patch.get("external-controller").is_some() {
+            Config::generate().await?;
+            CoreManager::global().restart_core().await?;
+        } else if listener_patch_needs_restart(patch).await {
+            // 当前内核不支持监听热替换(meow):端口/监听类改动经内核重启生效。
             Config::generate().await?;
             CoreManager::global().restart_core().await?;
         } else if patch.get("allow-lan").is_some() {
@@ -43,6 +47,12 @@ pub async fn patch_clash(patch: &Mapping) -> Result<()> {
             Err(err)
         }
     }
+}
+
+/// 当前内核是否不支持监听热替换且 patch 触及监听类键(能力模型判定,工单 07)。
+async fn listener_patch_needs_restart(patch: &Mapping) -> bool {
+    let core = Config::verge().await.latest_arc().get_valid_clash_core();
+    CoreCapabilities::for_core(&core).requires_restart_for_listener_patch(patch)
 }
 
 // Define update flags as bitflags for better performance

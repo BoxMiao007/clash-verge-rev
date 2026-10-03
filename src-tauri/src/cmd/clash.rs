@@ -6,7 +6,7 @@ use crate::{
     config::{ClashInfo, Config, profiles::profiles_save_file_safe},
     constants,
     core::{
-        CoreManager, handle,
+        CoreManager, capability::CoreCapabilities, handle,
         validate::{CoreConfigValidator, ValidationOutcome},
     },
 };
@@ -24,6 +24,13 @@ pub async fn copy_clash_env() -> CmdResult {
 #[tauri::command]
 pub async fn get_clash_info() -> CmdResult<ClashInfo> {
     Ok(Config::clash().await.data_arc().get_client_info())
+}
+
+/// 当前内核的能力清单:前端灰显与接口分流的唯一事实源(工单 07)。
+#[tauri::command]
+pub async fn get_core_capabilities() -> CmdResult<CoreCapabilities> {
+    let core = Config::verge().await.latest_arc().get_valid_clash_core();
+    Ok(CoreCapabilities::for_core(&core))
 }
 
 #[tauri::command]

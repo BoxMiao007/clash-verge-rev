@@ -5,6 +5,7 @@ import {
   ViewColumnRounded,
 } from '@mui/icons-material'
 import {
+  Alert,
   Box,
   Button,
   ButtonGroup,
@@ -39,8 +40,10 @@ import {
 import { ConnectionTable } from '@/components/connection/connection-table'
 import { useConnectionData } from '@/hooks/use-connection-data'
 import { useConnectionSetting } from '@/hooks/use-connection-setting'
+import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVisibility } from '@/hooks/use-visibility'
+import { getCoreDisplayName } from '@/services/core-capabilities'
 import parseTraffic from '@/utils/parse-traffic'
 
 type OrderFunc = (list: IConnectionsItem[]) => IConnectionsItem[]
@@ -82,6 +85,8 @@ const EMPTY_CONNECTIONS: IConnectionsItem[] = []
 const ConnectionsPage = () => {
   const { t } = useTranslation()
   const pageVisible = useVisibility()
+  // 内核能力差异的标注从这里取事实,组件不写内核特判(工单 07)
+  const capabilities = useCoreCapabilities()
   const [match, setMatch] = useState<(input: string) => boolean>(
     () => () => true,
   )
@@ -213,6 +218,13 @@ const ConnectionsPage = () => {
         </Box>
       }
     >
+      {!capabilities.udpConnectionTracking && (
+        <Alert severity="info" variant="outlined" sx={{ mx: '10px', mt: 1 }}>
+          {t('connections.page.notices.udpUnavailable', {
+            core: getCoreDisplayName(capabilities.core),
+          })}
+        </Alert>
+      )}
       <Box
         sx={{
           pt: 1,

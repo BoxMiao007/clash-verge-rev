@@ -151,6 +151,7 @@ mod app_init {
             cmd::continue_with_sidecar,
             cmd::sync_runtime_providers,
             cmd::get_clash_info,
+            cmd::get_core_capabilities,
             cmd::patch_clash_config,
             cmd::patch_clash_mode,
             cmd::get_clash_mode,

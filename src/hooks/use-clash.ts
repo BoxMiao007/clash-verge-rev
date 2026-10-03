@@ -9,6 +9,7 @@ import {
   getRuntimeConfig,
   patchClashConfig,
 } from '@/services/cmds'
+import { getCoreDisplayName } from '@/services/core-capabilities'
 import {
   revalidateQuery,
   setCacheData,
@@ -111,7 +112,7 @@ export const useClash = () => {
   })
 
   // meow 与 mihomo 同样返回 meta:true(mihomo 兼容标记),后缀按当前内核取名而非写死。
-  const coreLabel = verge?.clash_core === 'verge-meow' ? 'Meow' : 'Mihomo'
+  const coreLabel = getCoreDisplayName(verge?.clash_core)
   const version = versionData?.meta
     ? `${versionData.version} ${coreLabel}`
     : versionData?.version || '-'

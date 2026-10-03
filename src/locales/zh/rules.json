@@ -8,7 +8,10 @@
         "update": "更新"
       }
     },
-    "title": "规则"
+    "title": "规则",
+    "notices": {
+      "hitCountUnavailable": "当前内核 {{core}} 不支持规则命中计数,命中统计不可用;这是内核能力差异,而非故障。"
+    }
   },
   "feedback": {
     "notifications": {

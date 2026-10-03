@@ -8,7 +8,10 @@
         "update": "Яңарту"
       }
     },
-    "title": "Кагыйдәләр"
+    "title": "Кагыйдәләр",
+    "notices": {
+      "hitCountUnavailable": "The {{core}} kernel does not provide rule hit counting, so hit statistics are unavailable. This is a kernel capability difference, not a malfunction."
+    }
   },
   "feedback": {
     "notifications": {

@@ -1,4 +1,4 @@
-import { Box } from '@mui/material'
+import { Alert, Box } from '@mui/material'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -12,13 +12,17 @@ import {
 import { ScrollTopButton } from '@/components/layout/scroll-top-button'
 import { ProviderButton } from '@/components/rule/provider-button'
 import RuleItem from '@/components/rule/rule-item'
+import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import { useVisibility } from '@/hooks/use-visibility'
+import { getCoreDisplayName } from '@/services/core-capabilities'
 import { useAppRefreshers, useRulesData } from '@/providers/app-data-context'
 
 const RulesPage = () => {
   const { t } = useTranslation()
   const { rules = [] } = useRulesData()
   const { refreshRules, refreshRuleProviders } = useAppRefreshers()
+  // 内核能力差异的标注从这里取事实,组件不写内核特判(工单 07)
+  const capabilities = useCoreCapabilities()
   const [match, setMatch] = useState(() => (_: string) => true)
   const virtuosoRef = useRef<VirtualListHandle>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
@@ -81,6 +85,14 @@ const RulesPage = () => {
       >
         <BaseSearchBox onSearch={(match) => setMatch(() => match)} />
       </Box>
+
+      {!capabilities.ruleHitCounting && (
+        <Alert severity="info" variant="outlined" sx={{ mx: '10px', mb: 0.5 }}>
+          {t('rules.page.notices.hitCountUnavailable', {
+            core: getCoreDisplayName(capabilities.core),
+          })}
+        </Alert>
+      )}
 
       {filteredRules && filteredRules.length > 0 ? (
         <>

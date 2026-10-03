@@ -1,6 +1,9 @@
 {
   "page": {
-    "title": "连接"
+    "title": "连接",
+    "notices": {
+      "udpUnavailable": "当前内核 {{core}} 不支持 UDP 连接跟踪,连接列表仅显示 TCP 会话;这是内核能力差异,而非故障。"
+    }
   },
   "components": {
     "fields": {
