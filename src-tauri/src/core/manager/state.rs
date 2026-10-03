@@ -197,6 +197,25 @@ impl CoreManager {
 
 const SIDECAR_READINESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 const SIDECAR_READINESS_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(400);
+/// meow 重启前等待 ext-ctl 端口可绑定的上限:Linux TIME_WAIT 60 秒 + 余量。
+/// Windows 端 TIME_WAIT 更长时等不到,照常启动并让就绪探测/回滚兜底(工单 06 实测)。
+const EXT_CTL_PORT_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(75);
+const EXT_CTL_PORT_WAIT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Polls until `host:port` can be bound — no live listener and no TIME_WAIT leftover from a
+/// previous core — or the timeout passes. Best effort: the caller starts the core either way.
+async fn wait_for_tcp_port_bindable(host: &str, port: u16, timeout: std::time::Duration, interval: std::time::Duration) -> bool {
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        if tokio::net::TcpListener::bind((host, port)).await.is_ok() {
+            return true;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(interval).await;
+    }
+}
 
 async fn poll_sidecar_readiness<F, Fut>(
     max_attempts: usize,
@@ -328,6 +347,27 @@ impl CoreManager {
                     args.push(secret.clone());
                 }
             }
+        }
+        // meow 的 API 监听是 TCP(与 mihomo 的 IPC 不同),而 meow(tokio)的监听套接字不带
+        // SO_REUSEADDR(meow-api 源码为裸 `TcpListener::bind`):旧内核被杀后,其 API 长连接
+        // 会在内核侧留下最长约 60 秒的 TIME_WAIT,期间重绑同一 ext-ctl 端口报 EADDRINUSE,
+        // 且 meow v0.22.0 起 API 绑定失败为致命错误(内核直接退出)。启动前先等端口可绑定,
+        // 给内核侧端口释放留出窗口;冷启动时端口空闲,探测立即通过。超时则照常启动,
+        // 让后续就绪探测如实报错(升级路径据此回滚)。
+        if let SidecarApiTransport::Tcp { host, port, .. } = &transport
+            && !wait_for_tcp_port_bindable(
+                host,
+                *port,
+                EXT_CTL_PORT_WAIT_TIMEOUT,
+                EXT_CTL_PORT_WAIT_INTERVAL,
+            )
+            .await
+        {
+            logging!(
+                warn,
+                Type::Core,
+                "ext-ctl port {host}:{port} is still not bindable before the core start; starting anyway"
+            );
         }
         let command = command.args(args);
         #[cfg(windows)]
@@ -706,6 +746,43 @@ mod readiness_tests {
 
         assert_eq!(*manager.get_running_mode(), RunningMode::Service);
         assert_eq!(manager.current_core_readiness_generation(), None);
+    }
+}
+
+#[cfg(test)]
+mod port_wait_tests {
+    use super::wait_for_tcp_port_bindable;
+    use std::time::{Duration, Instant};
+
+    #[tokio::test]
+    async fn a_freshly_released_port_is_bindable_immediately() {
+        // 冷启动场景:没有监听者、没有 TIME_WAIT 遗留,探测一次即通过,不空等。
+        let squatter = std::net::TcpListener::bind("127.0.0.1:0").expect("failed to pick a free port");
+        let port = squatter.local_addr().expect("listener has a local address").port();
+        drop(squatter);
+
+        let started = Instant::now();
+        assert!(
+            wait_for_tcp_port_bindable("127.0.0.1", port, Duration::from_secs(2), Duration::from_millis(10)).await,
+            "a released port must be bindable"
+        );
+        assert!(started.elapsed() < Duration::from_secs(1), "must not wait for a free port");
+    }
+
+    #[tokio::test]
+    async fn a_held_port_blocks_until_the_timeout_and_then_gives_up() {
+        // 复刻 meow 的绑定语义:普通 bind(不带 SO_REUSEADDR),被占时新绑定报错。
+        let squatter = std::net::TcpListener::bind("127.0.0.1:0").expect("failed to pick a free port");
+        let port = squatter.local_addr().expect("listener has a local address").port();
+
+        let started = Instant::now();
+        assert!(
+            !wait_for_tcp_port_bindable("127.0.0.1", port, Duration::from_millis(150), Duration::from_millis(25))
+                .await,
+            "a held port must report not bindable"
+        );
+        assert!(started.elapsed() >= Duration::from_millis(100), "must keep waiting until the timeout");
+        drop(squatter);
     }
 }
 
