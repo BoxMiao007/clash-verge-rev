@@ -2710,7 +2710,9 @@ mod tests {
     #[test]
     fn mihomo_staging_manifest_has_no_companions() -> anyhow::Result<()> {
         let root = TestDirectory::new("mihomo-companions")?;
-        let core = root.path().join(format!("verge-mihomo{}", std::env::consts::EXE_SUFFIX));
+        let core = root
+            .path()
+            .join(format!("verge-mihomo{}", std::env::consts::EXE_SUFFIX));
         std::fs::write(&core, b"core")?;
         std::fs::write(root.path().join("wintun.dll"), b"tun driver")?;
 

@@ -6,7 +6,9 @@ use crate::{
     config::{ClashInfo, Config, profiles::profiles_save_file_safe},
     constants,
     core::{
-        CoreManager, capability::CoreCapabilities, handle,
+        CoreManager,
+        capability::CoreCapabilities,
+        handle,
         validate::{CoreConfigValidator, ValidationOutcome},
     },
 };

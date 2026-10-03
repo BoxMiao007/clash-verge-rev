@@ -50,8 +50,7 @@ impl CoreCapabilities {
     /// (meow-rs 兼容性文档;allow-lan 影响 bind_addr,同属监听类)。
     /// secret/external-controller 的重启是 patch_clash 既有行为,不经此判定。
     pub fn requires_restart_for_listener_patch(&self, patch: &Mapping) -> bool {
-        !self.listener_hot_reload
-            && LISTENER_PATCH_KEYS.iter().any(|key| patch.get(*key).is_some())
+        !self.listener_hot_reload && LISTENER_PATCH_KEYS.iter().any(|key| patch.get(*key).is_some())
     }
 }
 
