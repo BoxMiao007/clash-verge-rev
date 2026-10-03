@@ -630,6 +630,7 @@ fn read_core_version(path: &Path) -> Result<std::string::String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used, reason = "tests assert by panicking")]
 mod tests {
     use super::{
         core_versions_match, is_usable_version, meow_asset_target, meow_latest_tag, meow_package_url, package_url,
@@ -781,7 +782,7 @@ mod tests {
         for (path, data) in [
             (
                 "meow-v0.21.2-x86_64-unknown-linux-musl/LICENSE",
-                "license text".as_bytes(),
+                b"license text".as_slice(),
             ),
             ("meow-v0.21.2-x86_64-unknown-linux-musl/README.md", b"readme".as_slice()),
             (

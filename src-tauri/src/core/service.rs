@@ -719,8 +719,7 @@ fn install_service() -> Result<()> {
     // meow 的 TUN 驱动随 core 一起进服务目录;缺失时跳过,不阻塞服务安装(工单 04)。
     let companions = cores
         .iter()
-        .map(|core| core_staging_companions(&core.path))
-        .flatten()
+        .flat_map(|core| core_staging_companions(&core.path))
         .map(core_source_of_path)
         .collect::<Result<Vec<_>>>()?;
     invoke_service_install(&[cores, companions].concat(), false)

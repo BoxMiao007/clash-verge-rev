@@ -128,7 +128,7 @@ mod tests {
         tun.insert("auto-route".into(), true.into());
         tun.insert("strict-route".into(), false.into());
         tun.insert("auto-detect-interface".into(), true.into());
-        tun.insert("dns-hijack".into(), ["any:53"].into_iter().collect::<Value>());
+        tun.insert("dns-hijack".into(), std::iter::once("any:53").collect::<Value>());
 
         let mut dns = Mapping::new();
         dns.insert("enable".into(), true.into());
@@ -199,7 +199,7 @@ mod tests {
         let mut cors = Mapping::new();
         cors.insert(
             "allow-origins".into(),
-            ["https://yacd.metacubex.one"].into_iter().collect::<Value>(),
+            std::iter::once("https://yacd.metacubex.one").collect::<Value>(),
         );
         config.insert("external-controller-cors".into(), cors.into());
 

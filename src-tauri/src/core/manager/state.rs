@@ -93,6 +93,7 @@ fn apply_api_transport(transport: &CoreApiTransport) -> Result<()> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, reason = "tests assert by panicking")]
 mod sidecar_transport_tests {
     use super::{CoreApiTransport, core_api_transport};
 
@@ -768,6 +769,7 @@ mod readiness_tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, reason = "tests assert by panicking")]
 mod port_wait_tests {
     use super::wait_for_tcp_port_bindable;
     use std::time::{Duration, Instant};
