@@ -499,6 +499,31 @@ fn macos_service_tool_path(source: &Path) -> Result<PathBuf> {
     Ok(source.to_path_buf())
 }
 
+/// meow Windows zip 随包分发的 TUN 驱动等伴随文件;meow 按自身所在目录搜索
+/// wintun.dll,进服务目录的副本必须与 core 同目录才可供 TUN 使用(工单 04)。
+const MEOW_SERVICE_COMPANIONS: &[&str] = &["wintun.dll"];
+
+/// 进服务目录的 core 需要随行的伴随文件清单。meow 带 TUN 驱动,mihomo 系自嵌
+/// 驱动无伴随文件;清单只含当前实际存在的文件,缺失项不阻塞 core 本体的
+/// staging(打包安装的 wintun 由 NSIS 的 --install-core 带 digest 保证)。
+fn core_staging_companions(core_path: &Path) -> Vec<PathBuf> {
+    let Some(name) = core_path.file_name().and_then(|name| name.to_str()) else {
+        return Vec::new();
+    };
+    let stem = name.strip_suffix(std::env::consts::EXE_SUFFIX).unwrap_or(name);
+    if !crate::config::IVerge::is_meow_core(stem) {
+        return Vec::new();
+    }
+    let Some(directory) = core_path.parent() else {
+        return Vec::new();
+    };
+    MEOW_SERVICE_COMPANIONS
+        .iter()
+        .map(|file| directory.join(file))
+        .filter(|path| path.is_file())
+        .collect()
+}
+
 fn service_core_path(clash_core: &str, bin_ext: &str) -> Result<PathBuf> {
     let sibling = current_exe()
         .map_err(|error| {
@@ -691,7 +716,24 @@ fn install_service() -> Result<()> {
             }
         })
         .collect::<Vec<_>>();
-    invoke_service_install(&cores, false)
+    // meow 的 TUN 驱动随 core 一起进服务目录;缺失时跳过,不阻塞服务安装(工单 04)。
+    let companions = cores
+        .iter()
+        .map(|core| core_staging_companions(&core.path))
+        .flatten()
+        .map(core_source_of_path)
+        .collect::<Result<Vec<_>>>()?;
+    invoke_service_install(&[cores, companions].concat(), false)
+}
+
+/// Turns a staging companion path into a `CoreSource` entry under its own file name.
+fn core_source_of_path(path: PathBuf) -> Result<clash_verge_service_ipc::management::CoreSource> {
+    let name = path
+        .file_name()
+        .context("staging companion has no file name")?
+        .to_string_lossy()
+        .into_owned();
+    Ok(clash_verge_service_ipc::management::CoreSource { path, name })
 }
 
 fn invoke_service_install(cores: &[clash_verge_service_ipc::management::CoreSource], core_only: bool) -> Result<()> {
@@ -740,17 +782,22 @@ fn force_reinstall_service() -> Result<()> {
 /// hash was computed is refused by the installer instead of published.
 pub fn stage_approved_core(core_path: &Path) -> Result<()> {
     tokio::task::block_in_place(|| {
-        invoke_service_install(
-            &[clash_verge_service_ipc::management::CoreSource {
-                name: core_path
-                    .file_name()
-                    .context("core has no filename")?
-                    .to_string_lossy()
-                    .into_owned(),
-                path: core_path.to_path_buf(),
-            }],
-            true,
-        )
+        let mut sources = vec![clash_verge_service_ipc::management::CoreSource {
+            name: core_path
+                .file_name()
+                .context("core has no filename")?
+                .to_string_lossy()
+                .into_owned(),
+            path: core_path.to_path_buf(),
+        }];
+        // meow 的 TUN 驱动 wintun.dll 与 core 副本同目录,一并移交(工单 04)。
+        sources.extend(
+            core_staging_companions(core_path)
+                .into_iter()
+                .map(core_source_of_path)
+                .collect::<Result<Vec<_>>>()?,
+        );
+        invoke_service_install(&sources, true)
     })
 }
 
@@ -1984,8 +2031,8 @@ pub static SERVICE_MANAGER: ServiceManager = ServiceManager;
 mod tests {
     use super::{
         ServiceHealth, ServiceStatus, capture_generation_before, claim_owner_recovery_generation,
-        generate_service_session_token, mark_service_unavailable_after_owner_loss, owner_recovery_policy,
-        service_core_path_for, session_matches_status,
+        core_staging_companions, generate_service_session_token, mark_service_unavailable_after_owner_loss,
+        owner_recovery_policy, service_core_path_for, session_matches_status,
     };
     #[cfg(unix)]
     use super::{service_core_path_for_with_publisher, service_tool_path_for};
@@ -2643,5 +2690,43 @@ mod tests {
         assert!(!store.restore_sidecar_allowance());
         assert!(!store.state().sidecar_allowed);
         assert_eq!(status_of(&store), ServiceStatus::Ready);
+    }
+
+    /// 工单 04:meow 的 TUN 驱动 wintun.dll 必须与进服务目录的 meow 副本同目录
+    /// (meow 按自身所在目录搜索该 DLL),staging 清单要把同目录的 wintun.dll 带上。
+    #[test]
+    fn meow_staging_manifest_carries_wintun_dll() -> anyhow::Result<()> {
+        let root = TestDirectory::new("meow-companions")?;
+        let core = root.path().join(format!("verge-meow{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&core, b"core")?;
+        let wintun = root.path().join("wintun.dll");
+        std::fs::write(&wintun, b"tun driver")?;
+
+        assert_eq!(core_staging_companions(&core), vec![wintun]);
+        Ok(())
+    }
+
+    /// mihomo 系自嵌 TUN 驱动:即便目录里碰巧有 wintun.dll 也不随行。
+    #[test]
+    fn mihomo_staging_manifest_has_no_companions() -> anyhow::Result<()> {
+        let root = TestDirectory::new("mihomo-companions")?;
+        let core = root.path().join(format!("verge-mihomo{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&core, b"core")?;
+        std::fs::write(root.path().join("wintun.dll"), b"tun driver")?;
+
+        assert!(core_staging_companions(&core).is_empty());
+        Ok(())
+    }
+
+    /// wintun.dll 缺失(如 Linux 开发环境)时跳过,不阻塞 core 本体的 staging;
+    /// 打包安装的 wintun 由 NSIS 的 --install-core 带 digest 保证(工单 08 分发)。
+    #[test]
+    fn a_missing_wintun_is_skipped_instead_of_blocking_staging() -> anyhow::Result<()> {
+        let root = TestDirectory::new("no-wintun")?;
+        let core = root.path().join(format!("verge-meow{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&core, b"core")?;
+
+        assert!(core_staging_companions(&core).is_empty());
+        Ok(())
     }
 }
