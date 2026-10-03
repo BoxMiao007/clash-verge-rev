@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 
 /** 内核升级/GEO 更新的执行通道归属:内核自带接口,还是由 fork 侧命令托管。 */
-export type CoreUpdateChannel = 'kernelApi' | 'forkSide'
+type CoreUpdateChannel = 'kernelApi' | 'forkSide'
 
 /**
  * 内核能力:当前内核实现对外支持的操作与特性集合。
@@ -29,7 +29,7 @@ export interface ICoreCapabilities {
  * 查询未就绪时的 mihomo 基线:能力按"支持"处理,保证 mihomo 用户的界面
  * 在任何加载瞬间都不出现灰显;meow 的差异在载荷到达后才收敛呈现。
  */
-export const MIHOMO_BASELINE: ICoreCapabilities = {
+const MIHOMO_BASELINE: ICoreCapabilities = {
   core: 'verge-mihomo',
   udpConnectionTracking: true,
   ruleHitCounting: true,
