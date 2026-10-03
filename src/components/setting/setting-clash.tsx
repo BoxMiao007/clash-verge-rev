@@ -8,6 +8,7 @@ import { updateGeo, type LogLevel } from 'tauri-plugin-mihomo-api'
 import { BaseDialog, DialogRef, Switch, TooltipIcon } from '@/components/base'
 import { useClash } from '@/hooks/use-clash'
 import { useClashLog } from '@/hooks/use-clash-log'
+import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import { useDisplayedMixedPort } from '@/hooks/use-displayed-mixed-port'
 import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
@@ -45,6 +46,8 @@ const SettingClash = ({ onError }: Props) => {
     : false
   const displayedMixedPort = useDisplayedMixedPort()
   const [, setClashLog] = useClashLog()
+  // GEO 更新通道归属取自内核能力模型,组件不写内核特判(工单 07 收敛工单 06 预留点)
+  const capabilities = useCoreCapabilities()
 
   const {
     ipv6,
@@ -75,8 +78,8 @@ const SettingClash = ({ onError }: Props) => {
   const onUpdateGeo = async () => {
     try {
       // meow 没有 mihomo 的 /configs/geo API(工单 06):fork 侧下载替换 GEO 文件并重启内核;
-      // 接口分流的事实源等能力模型(工单 07)落地后再收敛。
-      if (verge?.clash_core === 'verge-meow') {
+      // 通道归属由 Rust 侧能力模型判定,前端按 geoUpdateChannel 分流(工单 07)。
+      if (capabilities.geoUpdateChannel === 'forkSide') {
         await updateMeowGeo()
       } else {
         await updateGeo()
