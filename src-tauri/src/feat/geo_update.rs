@@ -78,7 +78,7 @@ pub async fn update_meow_geo() -> Result<()> {
     logging!(
         info,
         Type::Core,
-        "meow geo update: {} file(s) replaced and the core restarted",
+        "meow GEO 更新: 已替换 {} 个文件并重启内核",
         staged.len()
     );
     Ok(())
@@ -106,7 +106,7 @@ async fn download_via_proxies(url: &str) -> Result<Vec<u8>> {
                 logging!(
                     debug,
                     Type::Core,
-                    "meow geo update: {url} via {proxy:?} failed: {error:#}"
+                    "meow GEO 更新: 经 {proxy:?} 下载 {url} 失败: {error:#}"
                 );
                 last_error = Some(error.context(format!("{proxy:?} could not download {url}")));
             }

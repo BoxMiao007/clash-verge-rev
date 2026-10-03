@@ -114,8 +114,7 @@ mod sidecar_transport_tests {
     #[test]
     fn meow_sidecar_runs_on_tcp_and_carries_the_secret() {
         assert_eq!(
-            core_api_transport("verge-meow", "/ipc.sock", "127.0.0.1:9097", Some("secret-1"))
-                .expect("meow transport"),
+            core_api_transport("verge-meow", "/ipc.sock", "127.0.0.1:9097", Some("secret-1")).expect("meow transport"),
             CoreApiTransport::Tcp {
                 host: "127.0.0.1".into(),
                 port: 9097,
@@ -277,7 +276,11 @@ async fn wait_ext_ctl_port_bindable(transport: &CoreApiTransport, scene: &str) {
     if let CoreApiTransport::Tcp { host, port, .. } = transport
         && !wait_for_tcp_port_bindable(host, *port, EXT_CTL_PORT_WAIT_TIMEOUT, EXT_CTL_PORT_WAIT_INTERVAL).await
     {
-        logging!(warn, Type::Core, "ext-ctl 端口 {host}:{port} 在{scene}前仍不可绑定,照常启动");
+        logging!(
+            warn,
+            Type::Core,
+            "ext-ctl 端口 {host}:{port} 在{scene}前仍不可绑定,照常启动"
+        );
     }
 }
 

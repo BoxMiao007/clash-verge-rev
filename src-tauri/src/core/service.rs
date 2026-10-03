@@ -726,7 +726,7 @@ fn install_service() -> Result<()> {
     invoke_service_install(&[cores, companions].concat(), false)
 }
 
-/// Turns a staging companion path into a `CoreSource` entry under its own file name.
+/// 把 staging 伴随文件路径转成以其自身文件名命名的 `CoreSource` 条目。
 fn core_source_of_path(path: PathBuf) -> Result<clash_verge_service_ipc::management::CoreSource> {
     let name = path
         .file_name()

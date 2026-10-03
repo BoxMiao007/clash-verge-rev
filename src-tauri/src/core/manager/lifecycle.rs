@@ -768,10 +768,10 @@ impl CoreManager {
             logging!(
                 error,
                 Type::Core,
-                "core switch to {clash_core} failed validation, rolling back to {previous}: {error:#}"
+                "内核切换到 {clash_core} 校验未通过,回滚到 {previous}: {error:#}"
             );
             if let Err(rollback_error) = self.persist_clash_core(&previous).await {
-                logging!(error, Type::Core, "rollback persistence failed: {rollback_error:#}");
+                logging!(error, Type::Core, "回滚持久化失败: {rollback_error:#}");
                 return Err(anyhow::anyhow!("{error:#}; rollback also failed: {rollback_error:#}"));
             }
             return Err(error);

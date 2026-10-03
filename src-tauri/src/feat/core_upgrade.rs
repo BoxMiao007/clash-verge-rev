@@ -1,4 +1,4 @@
-//! In-app core upgrade for both managed cores (mihomo / mihomo-alpha / meow).
+//! 应用内内核升级(mihomo / mihomo-alpha / meow 三内核通用)。
 //!
 //! The core replaces itself by truncating its own running executable in place, which macOS
 //! kills under Hardened Runtime and which leaves a 0-byte core behind when interrupted
@@ -302,10 +302,9 @@ fn meow_latest_tag(body: &str) -> Option<std::string::String> {
     is_usable_version(&tag).then_some(tag)
 }
 
-/// Probes each egress in turn until the body yields a usable value, so an upgrade also works
-/// while the app's own proxy is the only route to GitHub. Returns the proxy that reached the
-/// URL so the package download reuses it. An unusable body (error page with 200, rate limit)
-/// moves on to the next egress instead of becoming a version.
+/// 逐出口探测直到响应体能给出可用值:即便只有应用自身代理可达 GitHub,升级也能工作。
+/// 返回打通该 URL 的出口,供后续包下载复用。不可用的响应体(200 错误页、限流页)
+/// 换下一个出口继续,而不是被当成版本号接受。
 async fn probe_until_usable(
     url: &str,
     timeout_secs: u64,
@@ -320,16 +319,12 @@ async fn probe_until_usable(
 
         match attempt {
             Ok(response) if response.status().is_success() => {
-                // An error page answered with 200 must not become a version, nor reach the URL.
+                // 200 应答的错误页不能变成版本号,更不能流进包 URL。
                 let body = response.text().trim().to_owned();
                 match extract(&body) {
                     Some(value) => return Ok((proxy, value)),
                     None => {
-                        logging!(
-                            warn,
-                            Type::Core,
-                            "core upgrade: {url} returned an unusable version: {body}"
-                        );
+                        logging!(warn, Type::Core, "内核升级: {url} 返回了不可用的版本内容: {body}");
                         last_error = Some(anyhow!("{url} returned an unusable version"));
                     }
                 }
@@ -338,17 +333,13 @@ async fn probe_until_usable(
                 logging!(
                     debug,
                     Type::Core,
-                    "core upgrade: version probe via {proxy:?}: status {}",
+                    "内核升级: 经 {proxy:?} 探测版本: 状态 {}",
                     response.status()
                 );
                 last_error = Some(anyhow!("{url} returned status {}", response.status()));
             }
             Err(error) => {
-                logging!(
-                    debug,
-                    Type::Core,
-                    "core upgrade: version probe via {proxy:?} failed: {error:#}"
-                );
+                logging!(debug, Type::Core, "内核升级: 经 {proxy:?} 探测版本失败: {error:#}");
                 last_error = Some(error.context(format!("{proxy:?} could not reach {url}")));
             }
         }
@@ -386,7 +377,7 @@ async fn download_package(proxy: ProxyType, alpha: bool, version: &str) -> Resul
         .with_context(|| format!("failed to download {url}"))
 }
 
-/// Looks up the meow release asset's target triple for the running platform.
+/// 查当前运行平台对应的 meow release 资产 target triple。
 fn meow_asset_target() -> Result<&'static str> {
     MEOW_ASSET_TARGETS
         .iter()
@@ -401,7 +392,7 @@ fn meow_asset_target() -> Result<&'static str> {
         })
 }
 
-/// Pins the meow package to the resolved tag: `meow-<tag>-<target>.zip`(Windows)
+/// 把 meow 包钉到已解析的版本:`meow-<tag>-<target>.zip`(Windows)
 /// 或 `.tar.gz`(其余),与 `scripts/prebuild.mjs` 下载的是同一份资产。
 fn meow_package_url(version: &str) -> Result<std::string::String> {
     let target = meow_asset_target()?;
@@ -417,7 +408,7 @@ fn meow_package_url(version: &str) -> Result<std::string::String> {
 /// `download_via_proxies` 同一策略(工单 06 实测)。
 async fn download_meow_package(version: &str) -> Result<Vec<u8>> {
     let url = meow_package_url(version)?;
-    logging!(info, Type::Core, "core upgrade: downloading {url}");
+    logging!(info, Type::Core, "内核升级: 下载 {url}");
 
     let mut last_error = None;
     for proxy in [ProxyType::Localhost, ProxyType::System, ProxyType::None] {
@@ -427,7 +418,7 @@ async fn download_meow_package(version: &str) -> Result<Vec<u8>> {
         {
             Ok(bytes) => return Ok(bytes),
             Err(error) => {
-                logging!(debug, Type::Core, "core upgrade: {url} via {proxy:?} failed: {error:#}");
+                logging!(debug, Type::Core, "内核升级: 经 {proxy:?} 下载 {url} 失败: {error:#}");
                 last_error = Some(error.context(format!("{proxy:?} could not download {url}")));
             }
         }
@@ -638,8 +629,8 @@ fn new_command(program: impl AsRef<OsStr>) -> Command {
     Command::new(program)
 }
 
-/// Parses the version out of the `-v` third token: `Mihomo Meta v1.19.30 darwin arm64 ...`
-/// for mihomo, `Meow Meta 0.21.2` for meow(mihomo 带 v 前缀而 meow 没有,比较时归一)。
+/// 从 `-v` 输出的第三个 token 解析版本号:mihomo 是 `Mihomo Meta v1.19.30 darwin arm64 ...`,
+/// meow 是 `Meow Meta 0.21.2`(mihomo 带 v 前缀而 meow 没有,比较时归一)。
 fn read_core_version(path: &Path) -> Result<std::string::String> {
     let output = new_command(path)
         .arg("-v")
