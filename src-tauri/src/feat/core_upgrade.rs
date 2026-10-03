@@ -1,13 +1,17 @@
-//! In-app mihomo core upgrade.
+//! In-app core upgrade for both managed cores (mihomo / mihomo-alpha / meow).
 //!
 //! The core replaces itself by truncating its own running executable in place, which macOS
 //! kills under Hardened Runtime and which leaves a 0-byte core behind when interrupted
 //! (clash-verge-rev#6834). Verge downloads the release itself instead, stages a verified
 //! copy beside the managed core and renames it into place: `rename` never touches the inode
 //! the running core is executing from, so no page validation can fail.
+//!
+//! 更新源按当前内核分源(工单 06):mihomo 系走 MetaCubeX releases(version.txt + 扁平压缩包),
+//! meow 走 meow-rs 官方 GitHub releases(GitHub API 取最新 tag + `meow-<tag>-<target>` 压缩包),
+//! staging、发布、服务移交与回滚共用同一条路径。
 
 use crate::{
-    config::Config,
+    config::{Config, IVerge},
     core::{CoreManager, manager::RunningMode},
     utils::network::{NetworkManager, ProxyType},
 };
@@ -25,10 +29,28 @@ use std::{
 const RELEASE_VERSION_URL: &str = "https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt";
 const ALPHA_BASE_URL: &str = "https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha";
 const RELEASE_DOWNLOAD_URL: &str = "https://github.com/MetaCubeX/mihomo/releases/download";
+const MEOW_LATEST_API_URL: &str = "https://api.github.com/repos/meow-rs/meow-rs/releases/latest";
+const MEOW_DOWNLOAD_URL: &str = "https://github.com/meow-rs/meow-rs/releases/download";
 const VERSION_TIMEOUT_SECS: u64 = 20;
 const PACKAGE_TIMEOUT_SECS: u64 = 300;
 /// Well above any real core package, low enough that a wrong response cannot exhaust memory.
 const MAX_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
+
+/// meow release 资产的 target triple,按 (OS, ARCH) 查表(数据而非散落 if)。
+/// 与 `scripts/prebuild.mjs` 的 `MEOW_ASSET_TARGETS` 保持同一套事实:fork 发布面是
+/// Windows x64(zip),Linux 取 musl 静态二进制供开发自测;其余平台仅为映射完整而列出。
+const MEOW_ASSET_TARGETS: &[(&str, &str, &str)] = &[
+    // (std::env::consts::OS, std::env::consts::ARCH, 资产名里的 target triple)
+    ("windows", "x86_64", "x86_64-pc-windows-msvc"),
+    ("windows", "x86", "i686-pc-windows-msvc"),
+    ("windows", "aarch64", "aarch64-pc-windows-msvc"),
+    ("linux", "x86_64", "x86_64-unknown-linux-musl"),
+    ("linux", "aarch64", "aarch64-unknown-linux-musl"),
+    ("linux", "arm", "armv7-unknown-linux-gnueabihf"),
+    ("linux", "riscv64", "riscv64gc-unknown-linux-musl"),
+    ("macos", "x86_64", "x86_64-apple-darwin"),
+    ("macos", "aarch64", "aarch64-apple-darwin"),
+];
 
 static STAGING_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// `.rollback` and `.old` are fixed paths, so two upgrades must not overlap.
@@ -46,7 +68,8 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
     let _serialized = UPGRADE_LOCK.lock().await;
     let core = Config::verge().await.latest_arc().get_valid_clash_core();
     tracing::Span::current().record("core", tracing::field::display(&core));
-    let alpha = core.ends_with("-alpha");
+    let meow = IVerge::is_meow_core(&core);
+    let alpha = !meow && core.ends_with("-alpha");
     let target = managed_core_path(&core)?;
 
     // A core already broken by the in-place updater cannot report a version; upgrading is the repair.
@@ -55,13 +78,18 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
         std::string::String::new()
     });
 
-    let (proxy, latest) = resolve_latest_version(alpha).await?;
+    let (proxy, latest) = if meow {
+        resolve_latest_meow_version().await?
+    } else {
+        resolve_latest_version(alpha).await?
+    };
     let span = tracing::Span::current();
     span.record("from", tracing::field::display(&installed));
     span.record("to", tracing::field::display(&latest));
     logging!(debug, Type::Core, "core upgrade: latest version resolved via {proxy:?}");
 
-    if !force && installed == latest {
+    // meow 的 tag 与 `-v` 输出 v 前缀不一致,归一后再比(对 mihomo 无影响)。
+    if !force && core_versions_match(&installed, &latest) {
         return Ok(CoreUpgradeReport {
             upgraded: false,
             from: installed,
@@ -69,28 +97,42 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
         });
     }
 
-    let package = download_package(proxy, alpha, &latest).await?;
-    let staged = stage_core(&target, &package, &latest)?;
+    let package = if meow {
+        download_meow_package(proxy, &latest).await?
+    } else {
+        download_package(proxy, alpha, &latest).await?
+    };
+    let staged = stage_core(&target, &package, &latest, &core)?;
 
+    publish_staged_core(staged, &target, &core, &installed).await?;
+
+    Ok(CoreUpgradeReport {
+        upgraded: true,
+        from: installed,
+        to: latest,
+    })
+}
+
+/// staging 验证通过后的共同路径:硬链接保旧、原子发布、服务模式移交、重启,失败自动回滚。
+async fn publish_staged_core(staged: StagedCore, target: &Path, core: &str, installed: &str) -> Result<()> {
     // A hard link keeps the previous core reachable without touching the inode the running
     // core executes from, so publishing below stays one atomic rename.
     let rollback = target.with_file_name(format!(".{core}.rollback"));
     let _ = std::fs::remove_file(&rollback);
     // Nothing to roll back to when the core we are replacing could not report a version.
-    let restorable = !installed.is_empty() && std::fs::hard_link(&target, &rollback).is_ok();
+    let restorable = !installed.is_empty() && std::fs::hard_link(target, &rollback).is_ok();
 
     // Decided before anything can crash: after a failed restart the mode reads NotRunning, which
     // says nothing about whether this upgrade went through the Service.
     let service_mode = matches!(*CoreManager::global().get_running_mode(), RunningMode::Service);
 
-    let mut result = staged.publish(&target);
+    let mut result = staged.publish(target);
     // The Service executes its own administrator-approved copy, never this file; hand the new
     // bytes over before the restart below asks for them, or a service-mode restart would keep
     // running the previous core while the app reports the new version. Sidecar mode runs the
     // file directly and gets no elevation prompt.
     let service_staging = if result.is_ok() && service_mode {
-        result =
-            crate::core::service::stage_approved_core(&target).context("core replaced but not accepted by the service");
+        result = crate::core::service::stage_approved_core(target).context("core replaced but not accepted by the service");
         if result.is_ok() {
             ServiceStaging::Succeeded
         } else {
@@ -100,10 +142,20 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
         ServiceStaging::NotAttempted
     };
     if result.is_ok() {
-        result = CoreManager::global()
-            .restart_core()
-            .await
-            .context("core replaced but failed to restart");
+        // 工单 06 本地回滚实测注入(提交前移除):VERGE_TEST_FAIL_RESTART 置位时,首次重启
+        // 先停内核再报失败,模拟「新内核启动即崩」,驱动下方的 rename 回滚 + 旧内核重启路径。
+        static TEST_FAIL_RESTART_ONCE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if std::env::var_os("VERGE_TEST_FAIL_RESTART").is_some()
+            && !TEST_FAIL_RESTART_ONCE.swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            CoreManager::global().stop_core().await;
+            result = Err(anyhow!("injected: the new core died on startup (rollback verification)"));
+        } else {
+            result = CoreManager::global()
+                .restart_core()
+                .await
+                .context("core replaced but failed to restart");
+        }
     }
 
     if let Err(error) = result {
@@ -114,7 +166,7 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
         let core_is_down = matches!(*CoreManager::global().get_running_mode(), RunningMode::NotRunning);
         if restorable
             && (matches!(service_staging, ServiceStaging::Refused) || core_is_down || !target.exists())
-            && std::fs::rename(&rollback, &target).is_ok()
+            && std::fs::rename(&rollback, target).is_ok()
         {
             logging!(warn, Type::Core, "core upgrade: rolled back to {installed:?}");
             // Only a staging that SUCCEEDED left the failing bytes in the approved copy, and only
@@ -124,7 +176,7 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
             // deliberately not gated on the current running mode, which reads NotRunning after
             // the very crash being rolled back.
             if matches!(service_staging, ServiceStaging::Succeeded)
-                && let Err(stage_error) = crate::core::service::stage_approved_core(&target)
+                && let Err(stage_error) = crate::core::service::stage_approved_core(target)
             {
                 logging!(
                     warn,
@@ -150,11 +202,7 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
     #[cfg(windows)]
     let _ = std::fs::remove_file(target.with_extension("old"));
 
-    Ok(CoreUpgradeReport {
-        upgraded: true,
-        from: installed,
-        to: latest,
-    })
+    Ok(())
 }
 
 /// Whether this upgrade handed bytes to the Service's approved core directory.
@@ -234,27 +282,60 @@ async fn resolve_latest_version(alpha: bool) -> Result<(ProxyType, std::string::
     } else {
         RELEASE_VERSION_URL.to_owned()
     };
+    probe_until_usable(&url, VERSION_TIMEOUT_SECS, |body| {
+        is_usable_version(body).then(|| body.to_owned())
+    })
+    .await
+}
+
+/// meow 的最新版本取自 GitHub releases/latest API 的 `tag_name`(形如 v0.21.2)。
+/// meow 没有 mihomo 那样的 version.txt 资产,API 是唯一稳定的最新版事实源;
+/// 未认证配额(60 次/时/IP)对人工触发的升级足够。
+async fn resolve_latest_meow_version() -> Result<(ProxyType, std::string::String)> {
+    probe_until_usable(MEOW_LATEST_API_URL, VERSION_TIMEOUT_SECS, meow_latest_tag).await
+}
+
+/// 解析 releases/latest 响应里的 `tag_name`;错误页、限流响应与越轨字符都不能变成版本号。
+fn meow_latest_tag(body: &str) -> Option<std::string::String> {
+    let tag = serde_json::from_str::<serde_json::Value>(body)
+        .ok()?
+        .get("tag_name")?
+        .as_str()?
+        .to_owned();
+    is_usable_version(&tag).then_some(tag)
+}
+
+/// Probes each egress in turn until the body yields a usable value, so an upgrade also works
+/// while the app's own proxy is the only route to GitHub. Returns the proxy that reached the
+/// URL so the package download reuses it. An unusable body (error page with 200, rate limit)
+/// moves on to the next egress instead of becoming a version.
+async fn probe_until_usable(
+    url: &str,
+    timeout_secs: u64,
+    extract: impl Fn(&str) -> Option<std::string::String>,
+) -> Result<(ProxyType, std::string::String)> {
     let mut last_error = None;
 
     for proxy in [ProxyType::Localhost, ProxyType::System, ProxyType::None] {
         let attempt = NetworkManager::new()
-            .get(&url, proxy, Some(VERSION_TIMEOUT_SECS), None, false)
+            .get(url, proxy, Some(timeout_secs), None, false)
             .await;
 
         match attempt {
             Ok(response) if response.status().is_success() => {
                 // An error page answered with 200 must not become a version, nor reach the URL.
-                let version = response.text().trim().to_owned();
-                if !is_usable_version(&version) {
-                    logging!(
-                        warn,
-                        Type::Core,
-                        "core upgrade: {url} returned an unusable version: {version:?}"
-                    );
-                    last_error = Some(anyhow!("{url} returned an unusable version"));
-                    continue;
+                let body = response.text().trim().to_owned();
+                match extract(&body) {
+                    Some(value) => return Ok((proxy, value)),
+                    None => {
+                        logging!(
+                            warn,
+                            Type::Core,
+                            "core upgrade: {url} returned an unusable version: {body}"
+                        );
+                        last_error = Some(anyhow!("{url} returned an unusable version"));
+                    }
                 }
-                return Ok((proxy, version));
             }
             Ok(response) => {
                 logging!(
@@ -288,8 +369,45 @@ fn is_usable_version(version: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
 }
 
+/// meow 的 release tag 带 `v` 前缀而 `-v` 输出没有(tag v0.21.2、`-v` 报 `Meow Meta 0.21.2`),
+/// 比较前把前缀归一;mihomo 两边格式一致,归一对它不改变判定。
+fn core_versions_match(a: &str, b: &str) -> bool {
+    strip_release_v_prefix(a) == strip_release_v_prefix(b)
+}
+
+fn strip_release_v_prefix(version: &str) -> &str {
+    version.strip_prefix('v').unwrap_or(version)
+}
+
 async fn download_package(proxy: ProxyType, alpha: bool, version: &str) -> Result<Vec<u8>> {
     let url = package_url(alpha, version)?;
+    logging!(info, Type::Core, "core upgrade: downloading {url}");
+
+    NetworkManager::new()
+        .get_bytes(&url, proxy, Some(PACKAGE_TIMEOUT_SECS), MAX_PACKAGE_BYTES)
+        .await
+        .with_context(|| format!("failed to download {url}"))
+}
+
+/// Looks up the meow release asset's target triple for the running platform.
+fn meow_asset_target() -> Result<&'static str> {
+    MEOW_ASSET_TARGETS
+        .iter()
+        .find(|(os, arch, _)| *os == std::env::consts::OS && *arch == std::env::consts::ARCH)
+        .map(|(_, _, target)| *target)
+        .ok_or_else(|| anyhow!("no meow release asset for {}-{}", std::env::consts::OS, std::env::consts::ARCH))
+}
+
+/// Pins the meow package to the resolved tag: `meow-<tag>-<target>.zip`(Windows)
+/// 或 `.tar.gz`(其余),与 `scripts/prebuild.mjs` 下载的是同一份资产。
+fn meow_package_url(version: &str) -> Result<std::string::String> {
+    let target = meow_asset_target()?;
+    let extension = if cfg!(windows) { "zip" } else { "tar.gz" };
+    Ok(format!("{MEOW_DOWNLOAD_URL}/{version}/meow-{version}-{target}.{extension}"))
+}
+
+async fn download_meow_package(proxy: ProxyType, version: &str) -> Result<Vec<u8>> {
+    let url = meow_package_url(version)?;
     logging!(info, Type::Core, "core upgrade: downloading {url}");
 
     NetworkManager::new()
@@ -320,7 +438,7 @@ impl Drop for StagedCore {
 
 /// Unpacks, permits, signs and runs the new core before it is allowed anywhere near the
 /// live path, so a bad download can never replace a working core.
-fn stage_core(target: &Path, package: &[u8], version: &str) -> Result<StagedCore> {
+fn stage_core(target: &Path, package: &[u8], version: &str, core: &str) -> Result<StagedCore> {
     let directory = target
         .parent()
         .with_context(|| format!("the managed core has no parent directory: {}", target.display()))?;
@@ -331,7 +449,7 @@ fn stage_core(target: &Path, package: &[u8], version: &str) -> Result<StagedCore
     let (path, mut file) = create_staging_file(directory, core_name)?;
     let staged = StagedCore { path };
 
-    unpack(package, &mut file).with_context(|| format!("failed to unpack the core package for {version}"))?;
+    unpack(package, &mut file, core).with_context(|| format!("failed to unpack the core package for {version}"))?;
 
     #[cfg(unix)]
     {
@@ -351,7 +469,7 @@ fn stage_core(target: &Path, package: &[u8], version: &str) -> Result<StagedCore
     drop(file);
 
     let staged_version = read_core_version(&staged.path).context("the staged core is not runnable")?;
-    if staged_version != version {
+    if !core_versions_match(&staged_version, version) {
         bail!("the staged core reports {staged_version}, expected {version}");
     }
 
@@ -379,8 +497,18 @@ fn create_staging_file(directory: &Path, core_name: &OsStr) -> Result<(PathBuf, 
     bail!("failed to create a unique staging file in {}", directory.display())
 }
 
+/// 两种内核的压缩包布局不同:mihomo 是扁平单文件(gz/zip),meow 把二进制放在
+/// `meow-<tag>-<target>/` 一层目录下(unix 为 tar.gz)。按当前升级的内核分派。
+fn unpack(package: &[u8], out: &mut File, core: &str) -> Result<()> {
+    if IVerge::is_meow_core(core) {
+        unpack_meow(package, out)
+    } else {
+        unpack_mihomo(package, out)
+    }
+}
+
 #[cfg(windows)]
-fn unpack(package: &[u8], out: &mut File) -> Result<()> {
+fn unpack_mihomo(package: &[u8], out: &mut File) -> Result<()> {
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(package)).context("invalid core archive")?;
     let mut entry = archive.by_index(0).context("the core archive is empty")?;
     std::io::copy(&mut entry, out).context("failed to extract the core")?;
@@ -388,10 +516,51 @@ fn unpack(package: &[u8], out: &mut File) -> Result<()> {
 }
 
 #[cfg(not(windows))]
-fn unpack(package: &[u8], out: &mut File) -> Result<()> {
+fn unpack_mihomo(package: &[u8], out: &mut File) -> Result<()> {
     let mut decoder = flate2::read::GzDecoder::new(package);
     std::io::copy(&mut decoder, out).context("failed to decompress the core")?;
     Ok(())
+}
+
+/// meow 的 tar.gz 把二进制放在 `meow-<tag>-<target>/` 目录层里,按文件名取条目,
+/// 不能像 mihomo 那样直接取第一个条目(压缩包里还有 LICENSE/README)。
+#[cfg(not(windows))]
+fn unpack_meow(package: &[u8], out: &mut File) -> Result<()> {
+    let gz = flate2::read::GzDecoder::new(package);
+    let mut archive = tar::Archive::new(gz);
+    for entry in archive.entries().context("invalid meow core archive")? {
+        let mut entry = entry.context("failed to read the meow core archive")?;
+        let is_binary = entry
+            .path()
+            .ok()
+            .and_then(|path| path.file_name().map(|name| name == OsStr::new("meow")))
+            .unwrap_or(false);
+        if is_binary {
+            return std::io::copy(&mut entry, out)
+                .map(|_| ())
+                .context("failed to extract the meow core");
+        }
+    }
+    bail!("the meow core archive has no `meow` binary")
+}
+
+/// Windows zip 同样带 `meow-<tag>-<target>/` 目录层(还含 wintun.dll),按文件名取 meow.exe。
+#[cfg(windows)]
+fn unpack_meow(package: &[u8], out: &mut File) -> Result<()> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(package)).context("invalid meow core archive")?;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).context("failed to read the meow core archive")?;
+        let is_binary = Path::new(entry.name())
+            .file_name()
+            .map(|name| name == OsStr::new("meow.exe"))
+            .unwrap_or(false);
+        if is_binary {
+            return std::io::copy(&mut entry, out)
+                .map(|_| ())
+                .context("failed to extract the meow core");
+        }
+    }
+    bail!("the meow core archive has no meow.exe")
 }
 
 impl StagedCore {
@@ -448,7 +617,8 @@ fn new_command(program: impl AsRef<OsStr>) -> Command {
     Command::new(program)
 }
 
-/// Parses the version out of `Mihomo Meta v1.19.30 darwin arm64 with go1.22.12 ...`.
+/// Parses the version out of the `-v` third token: `Mihomo Meta v1.19.30 darwin arm64 ...`
+/// for mihomo, `Meow Meta 0.21.2` for meow(mihomo 带 v 前缀而 meow 没有,比较时归一)。
 fn read_core_version(path: &Path) -> Result<std::string::String> {
     let output = new_command(path)
         .arg("-v")
@@ -469,7 +639,9 @@ fn read_core_version(path: &Path) -> Result<std::string::String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_usable_version, package_url};
+    use super::{
+        core_versions_match, is_usable_version, meow_asset_target, meow_latest_tag, meow_package_url, package_url,
+    };
 
     #[test]
     fn only_plain_version_tokens_reach_the_package_url() {
@@ -498,5 +670,130 @@ mod tests {
             "{release}"
         );
         assert!(alpha.contains("/Prerelease-Alpha/"), "{alpha}");
+    }
+
+    #[test]
+    fn version_comparison_ignores_the_release_v_prefix() {
+        // meow 的 release tag 带 v 前缀,`-v` 输出没有(tag v0.21.2、-v 报 0.21.2)。
+        assert!(core_versions_match("v0.21.2", "0.21.2"));
+        assert!(core_versions_match("0.21.2", "v0.21.2"));
+        // mihomo 两边格式一致,归一比较必须不改变判定。
+        assert!(core_versions_match("v1.19.30", "v1.19.30"));
+        assert!(core_versions_match("alpha-c0e43eb", "alpha-c0e43eb"));
+        assert!(!core_versions_match("v0.21.2", "v0.21.1"));
+        assert!(!core_versions_match("v0.21.2", "alpha-c0e43eb"));
+    }
+
+    #[test]
+    fn meow_latest_tag_is_taken_from_the_api_json_body() {
+        // 结构照抄 api.github.com/repos/meow-rs/meow-rs/releases/latest 的响应。
+        let body = r#"{"url":"https://api.github.com/repos/meow-rs/meow-rs/releases/377650398","tag_name":"v0.21.2","name":"v0.21.2"}"#;
+        assert_eq!(meow_latest_tag(body).as_deref(), Some("v0.21.2"));
+        // 限流响应与错误页都必须被拒之门外,不能变成版本号。
+        assert_eq!(meow_latest_tag(r#"{"message":"API rate limit exceeded"}"#), None);
+        assert_eq!(meow_latest_tag("<html>nope</html>"), None);
+        // 带 v 前缀以外的杂字符不符合可用版本判定。
+        assert_eq!(meow_latest_tag(r#"{"tag_name":"../etc/passwd"}"#), None);
+    }
+
+    #[test]
+    fn meow_asset_map_covers_the_fork_release_surface() {
+        // fork 只发 Windows x64;Linux musl 供开发自测。两条映射缺失即断供。
+        let required = [
+            (("windows", "x86_64"), "x86_64-pc-windows-msvc"),
+            (("linux", "x86_64"), "x86_64-unknown-linux-musl"),
+        ];
+        for ((os, arch), expected) in required {
+            assert_eq!(
+                super::MEOW_ASSET_TARGETS
+                    .iter()
+                    .find(|(entry_os, entry_arch, _)| (*entry_os, *entry_arch) == (os, arch))
+                    .map(|(_, _, target)| *target),
+                Some(expected),
+                "missing meow asset mapping for {os}-{arch}"
+            );
+        }
+        // 同一 (os, arch) 只能有一行,否则查找结果取决于行序。
+        let mut keys: Vec<_> = super::MEOW_ASSET_TARGETS.iter().map(|(os, arch, _)| (*os, *arch)).collect();
+        keys.sort_unstable();
+        let total = keys.len();
+        keys.dedup();
+        assert_eq!(keys.len(), total, "duplicate (os, arch) mapping in MEOW_ASSET_TARGETS");
+    }
+
+    #[test]
+    fn meow_asset_target_resolves_for_the_running_host() {
+        // 当前平台必须能查到资产:开发自测(linux)与发布(windows)都不能落空。
+        let target = meow_asset_target().expect("host platform must map to a meow asset");
+        assert!(target.contains(std::env::consts::ARCH) || target.starts_with("riscv64gc"), "{target}");
+    }
+
+    #[test]
+    fn meow_package_url_pins_the_resolved_version() {
+        let url = meow_package_url("v0.21.2").expect("host platform must map to a meow asset");
+        // 资产名与官方 release 完全一致(本仓库实测清单):meow-<tag>-<target>.zip|tar.gz。
+        #[cfg(windows)]
+        let expected = "https://github.com/meow-rs/meow-rs/releases/download/v0.21.2/meow-v0.21.2-x86_64-pc-windows-msvc.zip";
+        #[cfg(not(windows))]
+        let expected = "https://github.com/meow-rs/meow-rs/releases/download/v0.21.2/meow-v0.21.2-x86_64-unknown-linux-musl.tar.gz";
+        assert_eq!(url, expected);
+    }
+
+    /// 在临时目录准备一个接收解包产物的文件,测试后清理整个目录。
+    fn temp_unpack_sink(tag: &str) -> (std::path::PathBuf, std::fs::File) {
+        let directory = std::env::temp_dir().join(format!("verge-unpack-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("failed to create the unpack test directory");
+        let path = directory.join("staged");
+        let file = std::fs::File::create(&path).expect("failed to create the unpack sink");
+        (directory, file)
+    }
+
+    #[test]
+    fn mihomo_unpack_still_takes_the_single_flat_payload() {
+        use super::unpack;
+        use std::io::Write as _;
+
+        // 回归守卫(工单 06):mihomo 的 unix 包是裸 gz,整包就是二进制本身,不走 tar。
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        gz.write_all(b"mihomo-binary-bytes").unwrap();
+        let package = gz.finish().unwrap();
+
+        let (directory, mut out) = temp_unpack_sink("mihomo");
+        unpack(&package, &mut out, "verge-mihomo").expect("flat gz must unpack as before");
+        drop(out);
+        assert_eq!(std::fs::read(directory.join("staged")).unwrap(), b"mihomo-binary-bytes");
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn meow_archive_unpacks_the_binary_from_its_versioned_directory() {
+        use super::unpack;
+        use std::io::Write as _;
+
+        // 构造与官方布局一致的 tar.gz:`meow-<tag>-<target>/` 目录层,二进制前还有 LICENSE、
+        // README——按「第一个条目」或裸 gz 解压都拿不到正确内容。
+        let mut builder = tar::Builder::new(Vec::new());
+        for (path, data) in [
+            ("meow-v0.21.2-x86_64-unknown-linux-musl/LICENSE", "license text".as_bytes()),
+            ("meow-v0.21.2-x86_64-unknown-linux-musl/README.md", b"readme".as_slice()),
+            ("meow-v0.21.2-x86_64-unknown-linux-musl/meow", b"meow-binary-bytes".as_slice()),
+        ] {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(data.len() as u64);
+            header.set_mode(0o755);
+            header.set_cksum();
+            builder.append_data(&mut header, path, data).unwrap();
+        }
+        let tarball = builder.into_inner().unwrap();
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        gz.write_all(&tarball).unwrap();
+        let package = gz.finish().unwrap();
+
+        let (directory, mut out) = temp_unpack_sink("meow");
+        unpack(&package, &mut out, "verge-meow").expect("meow tar.gz must unpack the binary by name");
+        drop(out);
+        assert_eq!(std::fs::read(directory.join("staged")).unwrap(), b"meow-binary-bytes");
+        let _ = std::fs::remove_dir_all(&directory);
     }
 }

@@ -11,7 +11,7 @@ import { useClashLog } from '@/hooks/use-clash-log'
 import { useDisplayedMixedPort } from '@/hooks/use-displayed-mixed-port'
 import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
-import { invoke_uwp_tool, setDnsOverride } from '@/services/cmds'
+import { invoke_uwp_tool, setDnsOverride, updateMeowGeo } from '@/services/cmds'
 import { showNotice } from '@/services/notice-service'
 import getSystem from '@/utils/get-system'
 
@@ -74,7 +74,13 @@ const SettingClash = ({ onError }: Props) => {
   }
   const onUpdateGeo = async () => {
     try {
-      await updateGeo()
+      // meow 没有 mihomo 的 /configs/geo API(工单 06):fork 侧下载替换 GEO 文件并重启内核;
+      // 接口分流的事实源等能力模型(工单 07)落地后再收敛。
+      if (verge?.clash_core === 'verge-meow') {
+        await updateMeowGeo()
+      } else {
+        await updateGeo()
+      }
       showNotice.success('settings.feedback.notifications.clash.geoDataUpdated')
     } catch (err: any) {
       showNotice.error(err)

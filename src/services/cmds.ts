@@ -260,6 +260,14 @@ export async function upgradeClashCore(force = false) {
   return invoke<CoreUpgradeReport>('upgrade_clash_core', { force })
 }
 
+/**
+ * meow 专有的 GEO 更新通道(工单 06):meow 没有 mihomo 的 /configs/geo API,
+ * 由 fork 侧下载替换 GEO 文件并重启内核;仅在 meow 激活时调用。
+ */
+export async function updateMeowGeo() {
+  return invoke<void>('update_meow_geo')
+}
+
 export async function restartApp() {
   return invoke<void>('restart_app')
 }

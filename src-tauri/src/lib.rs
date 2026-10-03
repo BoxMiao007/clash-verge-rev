@@ -141,6 +141,7 @@ mod app_init {
             cmd::restart_app,
             cmd::restart_core,
             cmd::upgrade_clash_core,
+            cmd::update_meow_geo,
             cmd::get_runtime_state,
             cmd::get_pending_failures,
             cmd::entry_lightweight_mode,

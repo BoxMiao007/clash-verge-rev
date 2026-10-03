@@ -1132,6 +1132,7 @@ dependencies = [
  "smartstring",
  "socket2",
  "sysproxy",
+ "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
