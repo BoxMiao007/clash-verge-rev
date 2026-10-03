@@ -34,11 +34,14 @@ fn sidecar_config_without_tun(yaml: &str) -> Result<std::string::String> {
 
 const SIDECAR_READINESS_ATTEMPTS: usize = 30;
 
-/// sidecar 启动时的 API 传输形态,按内核分流(工单 02):
+/// sidecar 与服务模式共用的内核 API 传输形态,按内核分流(工单 02、04):
 /// mihomo 系监听 IPC socket(无 TCP 暴露);meow 只支持 TCP external-controller,
 /// 地址复用 verge 的 `external-controller` 设置,密钥随行走 Bearer/`?token=`。
+/// 服务模式下 mihomo 系指向服务托管的 IPC socket(路径由调用方给对),meow
+/// 仍只有 TCP——它没有 IPC 控制器,复位成 LocalSocket 只会指向一条永远不会
+/// 出现的 pipe,所以两种启动方式读同一份分流事实。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum SidecarApiTransport {
+pub(super) enum CoreApiTransport {
     IpcSocket {
         path: std::string::String,
     },
@@ -49,50 +52,37 @@ pub(super) enum SidecarApiTransport {
     },
 }
 
-pub(super) fn sidecar_api_transport(
+pub(super) fn core_api_transport(
     core: &str,
     ipc_path: &str,
     tcp_controller: &str,
     secret: Option<&str>,
-) -> anyhow::Result<SidecarApiTransport> {
+) -> anyhow::Result<CoreApiTransport> {
     if crate::config::IVerge::is_meow_core(core) {
         let addr: std::net::SocketAddr = tcp_controller.parse().map_err(|error| {
             anyhow::anyhow!(
                 "meow core requires a parsable external-controller address, got {tcp_controller:?}: {error}"
             )
         })?;
-        return Ok(SidecarApiTransport::Tcp {
+        return Ok(CoreApiTransport::Tcp {
             host: addr.ip().to_string(),
             port: addr.port(),
             secret: secret.filter(|s| !s.is_empty()).map(Into::into),
         });
     }
-    Ok(SidecarApiTransport::IpcSocket { path: ipc_path.into() })
+    Ok(CoreApiTransport::IpcSocket { path: ipc_path.into() })
 }
 
-/// 服务模式启动内核时的 API 传输形态(工单 04),与 sidecar 路径共用同一份
-/// 内核分流事实(工单 02):mihomo 系指向服务托管的 IPC socket,meow 只有
-/// TCP external-controller。服务模式因此不再无条件复位为 LocalSocket——
-/// meow 没有 IPC 控制器,复位会让客户端指向一条永远不会出现的 pipe。
-fn service_api_transport(
-    core: &str,
-    service_ipc: &str,
-    tcp_controller: &str,
-    secret: Option<&str>,
-) -> anyhow::Result<SidecarApiTransport> {
-    sidecar_api_transport(core, service_ipc, tcp_controller, secret)
-}
-
-/// 把 sidecar 的传输形态同步到 mihomo API 客户端。两个分支都显式设置协议,
+/// 把内核 API 传输形态同步到 mihomo API 客户端。两个分支都显式设置协议,
 /// 防止上一次会话(可能是 meow 的 TCP)遗留的协议状态泄漏进本次启动。
-fn apply_api_transport(transport: &SidecarApiTransport) -> Result<()> {
+fn apply_api_transport(transport: &CoreApiTransport) -> Result<()> {
     let mihomo = handle::Handle::app_handle().mihomo();
     match transport {
-        SidecarApiTransport::IpcSocket { path } => {
+        CoreApiTransport::IpcSocket { path } => {
             mihomo.update_protocol(tauri_plugin_mihomo::models::Protocol::LocalSocket)?;
             mihomo.update_socket_path(path.to_owned())?;
         }
-        SidecarApiTransport::Tcp { host, port, secret } => {
+        CoreApiTransport::Tcp { host, port, secret } => {
             mihomo.update_protocol(tauri_plugin_mihomo::models::Protocol::Http)?;
             mihomo.update_external_host(Some(host));
             mihomo.update_external_port(Some(*port));
@@ -104,15 +94,15 @@ fn apply_api_transport(transport: &SidecarApiTransport) -> Result<()> {
 
 #[cfg(test)]
 mod sidecar_transport_tests {
-    use super::{SidecarApiTransport, service_api_transport, sidecar_api_transport};
+    use super::{CoreApiTransport, core_api_transport};
 
     /// 工单 02:mihomo 系 sidecar 继续走 IPC socket,不受 meow 引入的 TCP 分流影响。
     #[test]
-    fn sidecar_api_transport_routes_mihomo_through_ipc() {
+    fn core_api_transport_routes_mihomo_through_ipc() {
         for core in ["verge-mihomo", "verge-mihomo-alpha"] {
             assert_eq!(
-                sidecar_api_transport(core, "/ipc.sock", "127.0.0.1:9097", Some("s")).expect("mihomo transport"),
-                SidecarApiTransport::IpcSocket {
+                core_api_transport(core, "/ipc.sock", "127.0.0.1:9097", Some("s")).expect("mihomo transport"),
+                CoreApiTransport::IpcSocket {
                     path: "/ipc.sock".into()
                 }
             );
@@ -124,9 +114,9 @@ mod sidecar_transport_tests {
     #[test]
     fn meow_sidecar_runs_on_tcp_and_carries_the_secret() {
         assert_eq!(
-            sidecar_api_transport("verge-meow", "/ipc.sock", "127.0.0.1:9097", Some("secret-1"))
+            core_api_transport("verge-meow", "/ipc.sock", "127.0.0.1:9097", Some("secret-1"))
                 .expect("meow transport"),
-            SidecarApiTransport::Tcp {
+            CoreApiTransport::Tcp {
                 host: "127.0.0.1".into(),
                 port: 9097,
                 secret: Some("secret-1".into()),
@@ -134,8 +124,8 @@ mod sidecar_transport_tests {
         );
         assert!(
             matches!(
-                sidecar_api_transport("verge-meow", "/ipc.sock", "127.0.0.1:9097", Some("")),
-                Ok(SidecarApiTransport::Tcp { secret: None, .. })
+                core_api_transport("verge-meow", "/ipc.sock", "127.0.0.1:9097", Some("")),
+                Ok(CoreApiTransport::Tcp { secret: None, .. })
             ),
             "empty secret must degrade to unauthenticated, not an empty bearer token"
         );
@@ -146,42 +136,15 @@ mod sidecar_transport_tests {
     fn meow_sidecar_without_a_usable_controller_fails_fast() {
         for addr in ["", "not-an-addr"] {
             assert!(
-                sidecar_api_transport("verge-meow", "/ipc.sock", addr, None).is_err(),
+                core_api_transport("verge-meow", "/ipc.sock", addr, None).is_err(),
                 "controller address {addr:?} must be rejected"
             );
         }
     }
 
-    /// 工单 04:服务模式下 mihomo 系仍指向服务托管的 IPC socket(与 sidecar 路径
-    /// 的 sidecar IPC 不同,启动前由调用方选对路径参数)。
-    #[test]
-    fn service_mode_keeps_mihomo_on_the_service_ipc_socket() {
-        for core in ["verge-mihomo", "verge-mihomo-alpha"] {
-            assert_eq!(
-                service_api_transport(core, "/service/core.sock", "127.0.0.1:9097", Some("s"))
-                    .expect("mihomo service transport"),
-                SidecarApiTransport::IpcSocket {
-                    path: "/service/core.sock".into()
-                }
-            );
-        }
-    }
-
-    /// 工单 04:服务模式对 meow 不再无条件复位为 LocalSocket——meow 没有 IPC
-    /// 控制器,复位会让客户端指向一条永远不会出现的 pipe;API 走 TCP,
-    /// 与 sidecar 路径共用同一份内核分流事实。
-    #[test]
-    fn service_mode_runs_meow_on_tcp_not_the_service_pipe() {
-        assert_eq!(
-            service_api_transport("verge-meow", "/service/core.sock", "127.0.0.1:9097", Some("secret-1"))
-                .expect("meow service transport"),
-            SidecarApiTransport::Tcp {
-                host: "127.0.0.1".into(),
-                port: 9097,
-                secret: Some("secret-1".into()),
-            }
-        );
-    }
+    // 工单 04 的「服务模式传输形态」曾单列两条测试;分流函数合一后,服务模式
+    // 与 sidecar 直调同一份事实(差异只在调用方传入的 IPC 路径),无独立行为可测,
+    // 不为转发链路重复断言。
 }
 
 #[cfg(target_os = "windows")]
@@ -246,8 +209,8 @@ const SIDECAR_READINESS_PROBE_TIMEOUT: std::time::Duration = std::time::Duration
 const EXT_CTL_PORT_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(75);
 const EXT_CTL_PORT_WAIT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
 
-/// Polls until `host:port` can be bound — no live listener and no TIME_WAIT leftover from a
-/// previous core — or the timeout passes. Best effort: the caller starts the core either way.
+/// 轮询直到 `host:port` 可以绑定——没有存活监听者、也没有上一个内核留下的
+/// TIME_WAIT——或超时为止。尽力而为:无论结果如何调用方都会启动内核。
 async fn wait_for_tcp_port_bindable(
     host: &str,
     port: u16,
@@ -303,6 +266,21 @@ fn should_clear_terminated_sidecar(running_mode: &RunningMode, current_pid: Opti
     matches!(running_mode, RunningMode::Sidecar) && current_pid == Some(terminated_pid)
 }
 
+/// meow 的 API 监听是 TCP(与 mihomo 的 IPC 不同),而 meow(tokio)的监听套接字不带
+/// SO_REUSEADDR(meow-api 源码为裸 `TcpListener::bind`):旧内核被杀后,其 API 长连接
+/// 会在内核侧留下最长约 60 秒的 TIME_WAIT,期间重绑同一 ext-ctl 端口报 EADDRINUSE,
+/// 且 meow v0.22.0 起 API 绑定失败为致命错误(内核直接退出)。sidecar 与服务启动
+/// (含 sidecar → 服务交接)都在启动前先等端口可绑定,给内核侧端口释放留出窗口;
+/// 冷启动时端口空闲,探测立即通过。超时则照常启动,让后续就绪探测/服务启动结果
+/// 如实报错(sidecar 的升级路径据此回滚,工单 06 实测)。
+async fn wait_ext_ctl_port_bindable(transport: &CoreApiTransport, scene: &str) {
+    if let CoreApiTransport::Tcp { host, port, .. } = transport
+        && !wait_for_tcp_port_bindable(host, *port, EXT_CTL_PORT_WAIT_TIMEOUT, EXT_CTL_PORT_WAIT_INTERVAL).await
+    {
+        logging!(warn, Type::Core, "ext-ctl 端口 {host}:{port} 在{scene}前仍不可绑定,照常启动");
+    }
+}
+
 #[cfg(target_os = "windows")]
 use {
     std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle},
@@ -338,7 +316,7 @@ impl CoreManager {
         let sidecar_ipc = dirs::sidecar_ipc_path()?;
         let clash_core = Config::verge().await.latest_arc().get_valid_clash_core();
         let clash_info = Config::clash().await.data_arc().get_client_info();
-        let transport = sidecar_api_transport(
+        let transport = core_api_transport(
             clash_core.as_str(),
             dirs::path_to_str(&sidecar_ipc)?,
             &clash_info.server,
@@ -375,7 +353,7 @@ impl CoreManager {
         .into_iter()
         .collect();
         match &transport {
-            SidecarApiTransport::IpcSocket { path } => {
+            CoreApiTransport::IpcSocket { path } => {
                 args.push(
                     if cfg!(windows) {
                         "-ext-ctl-pipe"
@@ -388,7 +366,7 @@ impl CoreManager {
             }
             // meow 不支持 IPC external-controller,用 CLI override 强制 TCP 监听,
             // 不受运行时配置里 external-controller 被禁用(置空)的影响。
-            SidecarApiTransport::Tcp { host, port, secret } => {
+            CoreApiTransport::Tcp { host, port, secret } => {
                 args.push("--ext-ctl".to_owned());
                 args.push(format!("{host}:{port}"));
                 if let Some(secret) = secret {
@@ -397,21 +375,9 @@ impl CoreManager {
                 }
             }
         }
-        // meow 的 API 监听是 TCP(与 mihomo 的 IPC 不同),而 meow(tokio)的监听套接字不带
-        // SO_REUSEADDR(meow-api 源码为裸 `TcpListener::bind`):旧内核被杀后,其 API 长连接
-        // 会在内核侧留下最长约 60 秒的 TIME_WAIT,期间重绑同一 ext-ctl 端口报 EADDRINUSE,
-        // 且 meow v0.22.0 起 API 绑定失败为致命错误(内核直接退出)。启动前先等端口可绑定,
-        // 给内核侧端口释放留出窗口;冷启动时端口空闲,探测立即通过。超时则照常启动,
-        // 让后续就绪探测如实报错(升级路径据此回滚)。
-        if let SidecarApiTransport::Tcp { host, port, .. } = &transport
-            && !wait_for_tcp_port_bindable(host, *port, EXT_CTL_PORT_WAIT_TIMEOUT, EXT_CTL_PORT_WAIT_INTERVAL).await
-        {
-            logging!(
-                warn,
-                Type::Core,
-                "ext-ctl port {host}:{port} is still not bindable before the core start; starting anyway"
-            );
-        }
+        // meow 的 API 监听是 TCP:旧内核被杀后端口可能还在 TIME_WAIT,启动前先等它
+        // 可绑定(缘由与超时兜底见 wait_ext_ctl_port_bindable)。
+        wait_ext_ctl_port_bindable(&transport, "内核启动").await;
         let command = command.args(args);
         #[cfg(windows)]
         let command = command.env(
@@ -561,7 +527,7 @@ impl CoreManager {
         let config_file = Config::generate_file().await?;
         let clash_core = Config::verge().await.latest_arc().get_valid_clash_core();
         let clash_info = Config::clash().await.data_arc().get_client_info();
-        let transport = service_api_transport(
+        let transport = core_api_transport(
             clash_core.as_str(),
             dirs::path_to_str(&service_ipc)?,
             &clash_info.server,
@@ -570,17 +536,8 @@ impl CoreManager {
         // 两个分支都显式设置协议:防止上一个会话(可能是 meow sidecar 的 TCP)的
         // 传输形态泄漏进本次服务启动,同时 mihomo 仍指向服务的 IPC socket。
         apply_api_transport(&transport)?;
-        // meow 的 API 监听是 TCP,服务交接(如 meow sidecar → 服务托管)同样要给
-        // 旧内核的 TIME_WAIT 留端口释放窗口;超时照常启动,让服务侧启动结果兜底。
-        if let SidecarApiTransport::Tcp { host, port, .. } = &transport
-            && !wait_for_tcp_port_bindable(host, *port, EXT_CTL_PORT_WAIT_TIMEOUT, EXT_CTL_PORT_WAIT_INTERVAL).await
-        {
-            logging!(
-                warn,
-                Type::Core,
-                "ext-ctl port {host}:{port} is still not bindable before the service start; starting anyway"
-            );
-        }
+        // meow sidecar → 服务交接同样要给旧内核的 TIME_WAIT 留端口释放窗口。
+        wait_ext_ctl_port_bindable(&transport, "服务启动").await;
 
         self.start_core_by_service_with_config(&config_file).await
     }
