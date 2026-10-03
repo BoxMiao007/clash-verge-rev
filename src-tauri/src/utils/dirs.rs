@@ -13,9 +13,8 @@ pub static APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev";
 #[cfg(not(feature = "verge-dev"))]
 pub static BACKUP_DIR: &str = "clash-verge-rev-backup";
 
-// 工单 06 本地实测临时改:与并行会话(cvr-wt-03)的 .dev 数据目录隔离,提交前还原。
 #[cfg(feature = "verge-dev")]
-pub static APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev.dev06";
+pub static APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev.dev";
 #[cfg(feature = "verge-dev")]
 pub static BACKUP_DIR: &str = "clash-verge-rev-backup-dev";
 

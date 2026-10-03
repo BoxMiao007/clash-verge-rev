@@ -98,7 +98,7 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
     }
 
     let package = if meow {
-        download_meow_package(proxy, &latest).await?
+        download_meow_package(&latest).await?
     } else {
         download_package(proxy, alpha, &latest).await?
     };
@@ -143,22 +143,10 @@ async fn publish_staged_core(staged: StagedCore, target: &Path, core: &str, inst
         ServiceStaging::NotAttempted
     };
     if result.is_ok() {
-        // 工单 06 本地回滚实测注入(提交前移除):VERGE_TEST_FAIL_RESTART 置位时,首次重启
-        // 先停内核再报失败,模拟「新内核启动即崩」,驱动下方的 rename 回滚 + 旧内核重启路径。
-        static TEST_FAIL_RESTART_ONCE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-        if std::env::var_os("VERGE_TEST_FAIL_RESTART").is_some()
-            && !TEST_FAIL_RESTART_ONCE.swap(true, std::sync::atomic::Ordering::SeqCst)
-        {
-            CoreManager::global().stop_core().await;
-            result = Err(anyhow!(
-                "injected: the new core died on startup (rollback verification)"
-            ));
-        } else {
-            result = CoreManager::global()
-                .restart_core()
-                .await
-                .context("core replaced but failed to restart");
-        }
+        result = CoreManager::global()
+            .restart_core()
+            .await
+            .context("core replaced but failed to restart");
     }
 
     if let Err(error) = result {
@@ -166,7 +154,13 @@ async fn publish_staged_core(staged: StagedCore, target: &Path, core: &str, inst
         // after the new core started must keep the new file instead. A service that refused the
         // new core also restores: leaving the new file would make a retry read the new version
         // and report nothing to do while the service keeps running the old core.
-        let core_is_down = matches!(*CoreManager::global().get_running_mode(), RunningMode::NotRunning);
+        // 重启失败的错误返回与内核退出簿记存在毫秒级竞态:立即读模式可能仍看到 Sidecar,
+        // 把「新内核启动即死」误判为「新内核在跑」而跳过回滚,留下无内核运行的最糟状态
+        // (工单 06 实测)。短暂沉降后再读,新内核若真在跑,模式仍是 Sidecar 且不改判定。
+        let core_is_down = {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            matches!(*CoreManager::global().get_running_mode(), RunningMode::NotRunning)
+        };
         if restorable
             && (matches!(service_staging, ServiceStaging::Refused) || core_is_down || !target.exists())
             && std::fs::rename(&rollback, target).is_ok()
@@ -417,14 +411,28 @@ fn meow_package_url(version: &str) -> Result<std::string::String> {
     ))
 }
 
-async fn download_meow_package(proxy: ProxyType, version: &str) -> Result<Vec<u8>> {
+/// 逐出口探测下载,不复用版本解析的出口:api.github.com 与 release-assets 走不同域名,
+/// 不同出口对各域名的可达性可能不同(实测同一时刻代理出口被 API 限流、直连可达 API 但
+/// 达不到资产下载域),复用解析出口会把可用的下载路线挡在门外。与 geo_update 的
+/// `download_via_proxies` 同一策略(工单 06 实测)。
+async fn download_meow_package(version: &str) -> Result<Vec<u8>> {
     let url = meow_package_url(version)?;
     logging!(info, Type::Core, "core upgrade: downloading {url}");
 
-    NetworkManager::new()
-        .get_bytes(&url, proxy, Some(PACKAGE_TIMEOUT_SECS), MAX_PACKAGE_BYTES)
-        .await
-        .with_context(|| format!("failed to download {url}"))
+    let mut last_error = None;
+    for proxy in [ProxyType::Localhost, ProxyType::System, ProxyType::None] {
+        match NetworkManager::new()
+            .get_bytes(&url, proxy, Some(PACKAGE_TIMEOUT_SECS), MAX_PACKAGE_BYTES)
+            .await
+        {
+            Ok(bytes) => return Ok(bytes),
+            Err(error) => {
+                logging!(debug, Type::Core, "core upgrade: {url} via {proxy:?} failed: {error:#}");
+                last_error = Some(error.context(format!("{proxy:?} could not download {url}")));
+            }
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow!("failed to download {url}")))
 }
 
 /// A staged core that is removed unless publishing renamed it away.

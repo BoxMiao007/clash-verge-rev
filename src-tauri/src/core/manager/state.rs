@@ -204,7 +204,12 @@ const EXT_CTL_PORT_WAIT_INTERVAL: std::time::Duration = std::time::Duration::fro
 
 /// Polls until `host:port` can be bound — no live listener and no TIME_WAIT leftover from a
 /// previous core — or the timeout passes. Best effort: the caller starts the core either way.
-async fn wait_for_tcp_port_bindable(host: &str, port: u16, timeout: std::time::Duration, interval: std::time::Duration) -> bool {
+async fn wait_for_tcp_port_bindable(
+    host: &str,
+    port: u16,
+    timeout: std::time::Duration,
+    interval: std::time::Duration,
+) -> bool {
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
         if tokio::net::TcpListener::bind((host, port)).await.is_ok() {
@@ -355,13 +360,7 @@ impl CoreManager {
         // 给内核侧端口释放留出窗口;冷启动时端口空闲,探测立即通过。超时则照常启动,
         // 让后续就绪探测如实报错(升级路径据此回滚)。
         if let SidecarApiTransport::Tcp { host, port, .. } = &transport
-            && !wait_for_tcp_port_bindable(
-                host,
-                *port,
-                EXT_CTL_PORT_WAIT_TIMEOUT,
-                EXT_CTL_PORT_WAIT_INTERVAL,
-            )
-            .await
+            && !wait_for_tcp_port_bindable(host, *port, EXT_CTL_PORT_WAIT_TIMEOUT, EXT_CTL_PORT_WAIT_INTERVAL).await
         {
             logging!(
                 warn,
@@ -766,7 +765,10 @@ mod port_wait_tests {
             wait_for_tcp_port_bindable("127.0.0.1", port, Duration::from_secs(2), Duration::from_millis(10)).await,
             "a released port must be bindable"
         );
-        assert!(started.elapsed() < Duration::from_secs(1), "must not wait for a free port");
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "must not wait for a free port"
+        );
     }
 
     #[tokio::test]
@@ -777,11 +779,13 @@ mod port_wait_tests {
 
         let started = Instant::now();
         assert!(
-            !wait_for_tcp_port_bindable("127.0.0.1", port, Duration::from_millis(150), Duration::from_millis(25))
-                .await,
+            !wait_for_tcp_port_bindable("127.0.0.1", port, Duration::from_millis(150), Duration::from_millis(25)).await,
             "a held port must report not bindable"
         );
-        assert!(started.elapsed() >= Duration::from_millis(100), "must keep waiting until the timeout");
+        assert!(
+            started.elapsed() >= Duration::from_millis(100),
+            "must keep waiting until the timeout"
+        );
         drop(squatter);
     }
 }
