@@ -17,6 +17,7 @@ pub struct CoreCapabilities {
     pub udp_connection_tracking: bool,
     pub rule_hit_counting: bool,
     pub listener_hot_reload: bool,
+    pub service_hosting: bool,
     pub geo_update_channel: UpdateChannel,
     pub core_upgrade_channel: UpdateChannel,
 }
@@ -27,6 +28,8 @@ impl CoreCapabilities {
     ///   meow-rs `docs/mihomo-api-compatibility.md`:meow 不跟踪 UDP 会话、
     ///   /rules 无命中数据、PUT /configs 不做普通监听热替换、无 /configs/geo 与 /upgrade。
     /// - 两内核的升级都由 fork 侧 staging+回滚托管(ADR-0003),升级通道归属一致。
+    /// - service_hosting:钉住的 Clash Verge Service 硬编码 IPC 启动参数与就绪判定,
+    ///   无法托管 meow(详见 service_hosting 测试注释与本工单阻塞记录)。
     /// - 未知识别按 mihomo 处理:能力缺失宁可热更新失败,不可把 mihomo 用户当 meow 灰显。
     pub fn for_core(core: &str) -> Self {
         let meow = crate::config::IVerge::is_meow_core(core);
@@ -35,6 +38,7 @@ impl CoreCapabilities {
             udp_connection_tracking: !meow,
             rule_hit_counting: !meow,
             listener_hot_reload: !meow,
+            service_hosting: !meow,
             geo_update_channel: if meow {
                 UpdateChannel::ForkSide
             } else {
@@ -141,6 +145,7 @@ mod tests {
             assert!(caps.udp_connection_tracking);
             assert!(caps.rule_hit_counting);
             assert!(caps.listener_hot_reload);
+            assert!(caps.service_hosting);
             assert_eq!(caps.geo_update_channel, UpdateChannel::KernelApi);
             assert_eq!(caps.core_upgrade_channel, UpdateChannel::ForkSide);
         }
@@ -154,5 +159,18 @@ mod tests {
         assert!(caps.udp_connection_tracking);
         assert!(caps.rule_hit_counting);
         assert!(caps.listener_hot_reload);
+        assert!(caps.service_hosting);
+    }
+
+    /// 工单 04:服务托管能力。钉住的 Clash Verge Service(clash-verge-service-ipc
+    /// v2.7.5)对任何内核硬编码 `-ext-ctl-pipe` 启动参数,并把「内核创建 IPC pipe」
+    /// 当启动就绪判定;meow 的 CLI 不认 `-ext-ctl-pipe`(WSL 实测 v0.21.2 直接退出,
+    /// v0.22.0 源码仍不支持),服务因此无法托管 meow。服务端支持 TCP-only 内核后
+    /// (上游发版或 fork 服务),此处翻回 true 即可放通界面,启动链路已按 TCP 就绪。
+    #[test]
+    fn meow_is_not_hostable_by_the_service_yet() {
+        let caps = CoreCapabilities::for_core("verge-meow");
+
+        assert!(!caps.service_hosting);
     }
 }

@@ -867,6 +867,7 @@ export interface TranslationResources {
           }
           clashService: {
             appDataNotOwned: string
+            coreNotHostable: string
             installSuccess: string
             permissionFallback: string
             permissionRejectedReason: string

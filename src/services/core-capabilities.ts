@@ -17,6 +17,8 @@ export interface ICoreCapabilities {
   ruleHitCounting: boolean
   /** 是否支持监听器热替换:meow 改端口/监听类设置需内核重启才生效。 */
   listenerHotReload: boolean
+  /** 是否可被 Clash Verge Service 托管:meow 只有 TCP 控制器,当前服务无法托管(工单 04)。 */
+  serviceHosting: boolean
   /** GEO 数据库更新的通道归属(工单 06 消费)。 */
   geoUpdateChannel: CoreUpdateChannel
   /** 内核升级的通道归属(两内核均由 fork 侧托管,见 ADR-0003;工单 06 消费)。 */
@@ -32,6 +34,7 @@ export const MIHOMO_BASELINE: ICoreCapabilities = {
   udpConnectionTracking: true,
   ruleHitCounting: true,
   listenerHotReload: true,
+  serviceHosting: true,
   geoUpdateChannel: 'kernelApi',
   coreUpgradeChannel: 'forkSide',
 }

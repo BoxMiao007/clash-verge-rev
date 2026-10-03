@@ -23,6 +23,7 @@ describe('normalizeCoreCapabilities', () => {
       udpConnectionTracking: false,
       ruleHitCounting: false,
       listenerHotReload: false,
+      serviceHosting: false,
       geoUpdateChannel: 'forkSide',
       coreUpgradeChannel: 'forkSide',
     })
@@ -30,6 +31,7 @@ describe('normalizeCoreCapabilities', () => {
     expect(caps.udpConnectionTracking).toBe(false)
     expect(caps.ruleHitCounting).toBe(false)
     expect(caps.listenerHotReload).toBe(false)
+    expect(caps.serviceHosting).toBe(false)
     expect(caps.geoUpdateChannel).toBe('forkSide')
   })
 })
@@ -67,10 +69,7 @@ describe('capability notice copy', () => {
     if (!match) continue
     const [, locale, namespace] = match
     localeNames.add(locale)
-    notices.set(
-      `${locale}/${namespace}`,
-      module.default.page?.notices ?? {},
-    )
+    notices.set(`${locale}/${namespace}`, module.default.page?.notices ?? {})
   }
 
   const readNotice = (locale: string, namespace: string, key: string) =>

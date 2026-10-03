@@ -700,6 +700,7 @@
       "clashService": {
         "appDataNotOwned": "Hizmet çekirdeği başlatmayı reddetti; çünkü diskte uygulama veri klasörünün sahibi hesabınız değil (ana klasör harici bir sürücüdeyse sık görülür). Hizmeti onarmak bunu düzeltmez. Bu komutu bir terminalde çalıştırın, ardından uygulamayı yeniden başlatın:",
         "installSuccess": "Hizmet Başarıyla Kuruldu",
+        "coreNotHostable": "Meow çekirdeği henüz hizmet modunu desteklemiyor: pakete dahil olan hizmet çekirdekleri IPC üzerinden barındırır ve meow bunu uygulamaz, bu yüzden uygulama Sidecar modunda kalır. TUN için mihomo çekirdeğine geçin veya uygulamayı yönetici olarak çalıştırın.",
         "permissionFallback": "{{reason}} Sidecar moduna geçildi; TUN yönetici yetkisi gerektirir. Kılavuza göre sorunu düzeltip hizmeti yeniden yükleyin veya hizmeti yüklemeden uygulamayı yönetici olarak çalıştırın.",
         "permissionWritableReason": "Normal hesaplar çekirdek dosyalarını veya üst klasörü değiştirebildiği için hizmet, çekirdeği yükseltilmiş yetkilerle çalıştırmayı reddetti.",
         "permissionRejectedReason": "Hizmet, çekirdek dosya ve klasörlerinin yükseltilmiş yetkilerle güvenle çalıştırılabileceğini doğrulayamadı.",

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 
+import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import { useServiceInstaller } from '@/hooks/use-service-installer'
 import { useSystemState } from '@/hooks/use-system-state'
 import {
@@ -33,6 +34,9 @@ export const SystemInfoCard = () => {
   const { runningMode, isAdminMode, isSidecarMode, mutateSystemState } =
     useSystemState()
   const { installServiceAndRestartCore } = useServiceInstaller()
+  // 服务安装入口按内核能力分流:当前内核不能被服务托管时直接提示,避免
+  // 「装完服务重启内核必失败」的循环(工单 04,meow 下由能力事实灰显)。
+  const { serviceHosting } = useCoreCapabilities()
 
   const { checkUpdate: triggerCheckUpdate, lastCheckUpdate } = useUpdate(true)
 
@@ -87,12 +91,20 @@ export const SystemInfoCard = () => {
 
   const handleRunningModeClick = useCallback(async () => {
     if (isSidecarMode || (isAdminMode && isSidecarMode)) {
+      if (!serviceHosting) {
+        showNotice.warning(
+          'settings.feedback.notifications.clashService.coreNotHostable',
+          0,
+        )
+        return
+      }
       await installServiceAndRestartCore()
       await mutateSystemState()
     }
   }, [
     isSidecarMode,
     isAdminMode,
+    serviceHosting,
     installServiceAndRestartCore,
     mutateSystemState,
   ])
