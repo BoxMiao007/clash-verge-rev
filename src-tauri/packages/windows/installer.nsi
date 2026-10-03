@@ -983,6 +983,21 @@ Section Install
     Pop $0
     ${IfThen} $0 != 0 ${|} DetailPrint "Staging verge-mihomo-alpha returned $0" ${|}
   !endif
+  ; 工单 04:meow 副本与其 TUN 驱动一同进服务目录——meow 按自身所在目录搜索
+  ; wintun.dll,缺少它则服务模式 + TUN 不可用。须在上方 Rename 之后执行,
+  ; 此时 wintun.dll 已在安装根。staging 失败不致命,后续可用服务安装补投。
+  !ifdef MEOW_SHA256
+    DetailPrint "Staging verge-meow for ${PRODUCTNAME} Service..."
+    nsExec::ExecToLog '"$INSTDIR\resources\clash-verge-service-install.exe" --install-core "$INSTDIR\verge-meow.exe" --sha256 "${MEOW_SHA256}"'
+    Pop $0
+    ${IfThen} $0 != 0 ${|} DetailPrint "Staging verge-meow returned $0" ${|}
+  !endif
+  !ifdef WINTUN_SHA256
+    DetailPrint "Staging wintun.dll for ${PRODUCTNAME} Service..."
+    nsExec::ExecToLog '"$INSTDIR\resources\clash-verge-service-install.exe" --install-core "$INSTDIR\wintun.dll" --sha256 "${WINTUN_SHA256}"'
+    Pop $0
+    ${IfThen} $0 != 0 ${|} DetailPrint "Staging wintun.dll returned $0" ${|}
+  !endif
 
   !insertmacro StartVergeService
 

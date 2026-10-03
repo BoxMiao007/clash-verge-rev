@@ -778,6 +778,8 @@ async function resolveCoreHashes() {
   for (const [define, name] of [
     ['MIHOMO_SHA256', 'verge-mihomo'],
     ['MIHOMO_ALPHA_SHA256', 'verge-mihomo-alpha'],
+    // 工单 02:meow 作为第二 sidecar 一并发布,服务 staging 的 digest 同步产出
+    ['MEOW_SHA256', 'verge-meow'],
   ]) {
     const sidecar = path.join(SIDECAR_DIR, `${name}-${SIDECAR_HOST}.exe`)
     const digest = createHash('sha256')
@@ -785,6 +787,13 @@ async function resolveCoreHashes() {
       .digest('hex')
     lines.push(`!define ${define} "${digest}"`)
   }
+  // 工单 04:wintun.dll 要与 meow.exe 一起进服务目录(meow 按自身所在目录搜索
+  // TUN 驱动),安装段的 --install-core 用这份 digest 校验安装根上的 wintun.dll。
+  const wintun = path.join(RESOURCES_DIR, 'wintun.dll')
+  const wintunDigest = createHash('sha256')
+    .update(await fsp.readFile(wintun))
+    .digest('hex')
+  lines.push(`!define WINTUN_SHA256 "${wintunDigest}"`)
   await fsp.writeFile(CORE_HASHES_NSH, `${lines.join('\n')}\n`)
   log_success(`Generated ${CORE_HASHES_NSH}`)
 }
