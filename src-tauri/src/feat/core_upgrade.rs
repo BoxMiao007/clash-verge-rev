@@ -37,19 +37,14 @@ const PACKAGE_TIMEOUT_SECS: u64 = 300;
 const MAX_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 
 /// meow release 资产的 target triple,按 (OS, ARCH) 查表(数据而非散落 if)。
-/// 与 `scripts/prebuild.mjs` 的 `MEOW_ASSET_TARGETS` 保持同一套事实:fork 发布面是
-/// Windows x64(zip),Linux 取 musl 静态二进制供开发自测;其余平台仅为映射完整而列出。
+/// 与 `scripts/prebuild.mjs` 的 `MEOW_ASSET_TARGETS` 是同一套事实的两个视图:那边以
+/// host triple 为键,这边以 (OS, ARCH) 为键,逐行对应——fork 发布面只有 Windows x64
+/// (zip),Linux x64 取 musl 静态二进制供开发自测;其余平台两表都不列,查不到即
+/// fail fast(与 prebuild 对不受支持主机的报错一致)。下方测试锁住两表一致。
 const MEOW_ASSET_TARGETS: &[(&str, &str, &str)] = &[
     // (std::env::consts::OS, std::env::consts::ARCH, 资产名里的 target triple)
     ("windows", "x86_64", "x86_64-pc-windows-msvc"),
-    ("windows", "x86", "i686-pc-windows-msvc"),
-    ("windows", "aarch64", "aarch64-pc-windows-msvc"),
     ("linux", "x86_64", "x86_64-unknown-linux-musl"),
-    ("linux", "aarch64", "aarch64-unknown-linux-musl"),
-    ("linux", "arm", "armv7-unknown-linux-gnueabihf"),
-    ("linux", "riscv64", "riscv64gc-unknown-linux-musl"),
-    ("macos", "x86_64", "x86_64-apple-darwin"),
-    ("macos", "aarch64", "aarch64-apple-darwin"),
 ];
 
 static STAGING_GENERATION: AtomicU64 = AtomicU64::new(0);
@@ -694,22 +689,30 @@ mod tests {
     }
 
     #[test]
-    fn meow_asset_map_covers_the_fork_release_surface() {
-        // fork 只发 Windows x64;Linux musl 供开发自测。两条映射缺失即断供。
-        let required = [
+    fn meow_asset_map_stays_in_lockstep_with_the_prebuild_map() {
+        // 与 scripts/prebuild.mjs 的 MEOW_ASSET_TARGETS 逐行一致(键空间不同:那边以
+        // host triple 为键,这里以 (OS, ARCH) 为键)。prebuild 表无法被 Rust 测试直读,
+        // 快照即契约:两表必须同时增删,否则安装包与升级会拿到不同变体。
+        let expected = [
             (("windows", "x86_64"), "x86_64-pc-windows-msvc"),
             (("linux", "x86_64"), "x86_64-unknown-linux-musl"),
         ];
-        for ((os, arch), expected) in required {
+        for ((os, arch), target) in expected {
             assert_eq!(
                 super::MEOW_ASSET_TARGETS
                     .iter()
                     .find(|(entry_os, entry_arch, _)| (*entry_os, *entry_arch) == (os, arch))
                     .map(|(_, _, target)| *target),
-                Some(expected),
+                Some(target),
                 "missing meow asset mapping for {os}-{arch}"
             );
         }
+        // 表恰好只有发布面两行:多出的行等于声称支持 prebuild 不支持的平台。
+        assert_eq!(
+            super::MEOW_ASSET_TARGETS.len(),
+            expected.len(),
+            "MEOW_ASSET_TARGETS must stay in lockstep with scripts/prebuild.mjs"
+        );
         // 同一 (os, arch) 只能有一行,否则查找结果取决于行序。
         let mut keys: Vec<_> = super::MEOW_ASSET_TARGETS
             .iter()
@@ -725,10 +728,7 @@ mod tests {
     fn meow_asset_target_resolves_for_the_running_host() {
         // 当前平台必须能查到资产:开发自测(linux)与发布(windows)都不能落空。
         let target = meow_asset_target().expect("host platform must map to a meow asset");
-        assert!(
-            target.contains(std::env::consts::ARCH) || target.starts_with("riscv64gc"),
-            "{target}"
-        );
+        assert!(target.contains(std::env::consts::ARCH), "{target}");
     }
 
     #[test]
