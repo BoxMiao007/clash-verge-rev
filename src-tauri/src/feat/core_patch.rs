@@ -412,7 +412,11 @@ mod tests {
             Some("IN-PORT,9666,GLOBAL"),
             "栈顶必须是引用测速 listener 端口的引流规则"
         );
-        assert_eq!(rules[1].as_str(), Some("DOMAIN-SUFFIX,google.com,PROXY"), "用户规则原序保留");
+        assert_eq!(
+            rules[1].as_str(),
+            Some("DOMAIN-SUFFIX,google.com,PROXY"),
+            "用户规则原序保留"
+        );
         assert_eq!(rules[2].as_str(), Some("MATCH,DIRECT"));
         // listener 仍在且端口可读:测速命令依赖它定位通道(工单 03 剔除 proxy 后的接缝)。
         assert_eq!(crate::feat::speedtest_listener_port(&config), Some(9666));
