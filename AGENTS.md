@@ -84,7 +84,7 @@ fork 正式版用 dev 上的 `fork-release.yml` 工作流发布:官方 identity�
 | 功能 | 一句话说明 | 关键文件/入口 | 引入提交 |
 | ---- | ---------- | -------------- | -------- |
 | 节点下载测速 | 整组/单项限时下载测速,GLOBAL 专用通道不干扰当前选择,支持按速度排序与自定义 URL/时长/流量上限 | `src/services/speed.ts`、`src-tauri/src/feat/speedtest.rs`、代理页(按钮与排序)、设置页速度测试卡片(`src/components/setting/setting-verge-speedtest.tsx`) | `037da98a` |
-| meow-rs 平级第二内核 | 设置页与 mihomo 平级一键切换的第二内核(meow-rs,轻量 Rust 重写),单份配置按内核打补丁,能力差异由内核能力模型统一灰显;CI 按 package.json `meowCoreVersion` 钉版下载 meow.exe + wintun.dll 进安装包 | `src/config/verge.rs`(VALID_CLASH_CORES)、`src/core/manager/state.rs`(sidecar_api_transport)、`scripts/prebuild.mjs`(meow 下载)、`src-tauri/packages/windows/installer.nsi`(wintun 落位) | (合并 dev 时补) |
+| meow-rs 平级第二内核 | 设置页与 mihomo 平级一键切换的第二内核(meow-rs,轻量 Rust 重写),单份配置按内核打补丁,能力差异由内核能力模型统一灰显;服务模式对 meow 显式不可用(外部服务硬编码 IPC,决策见工单 04);CI 按 package.json `meowCoreVersion` 钉版下载 meow.exe + wintun.dll 进安装包 | `src/config/verge.rs`(VALID_CLASH_CORES)、`src/core/capability.rs`(能力模型)、`src/core/manager/state.rs`(core_api_transport)、`src/feat/core_patch.rs`(按内核配置补丁)、`scripts/prebuild.mjs`(meow 下载)、`src-tauri/packages/windows/installer.nsi`(wintun 落位) | `d00136a2`(feat/meow-rs-core 合入) |
 
 ## 降低合并冲突的约定
 
