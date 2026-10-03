@@ -237,6 +237,10 @@ impl Config {
         }
         // 下载测速专用 listener(仅绑 127.0.0.1,proxy: GLOBAL);实现收在 feat::speedtest,此处只留最小调用点。
         feat::inject_speedtest_listener(&mut config);
+        // 管线末端按当前内核打补丁:meow 激活时剔除不支持键并强制 TUN fake-ip,
+        // mihomo 系零改动;实现收在 feat::core_patch,此处只留最小调用点。
+        let clash_core = Self::verge().await.latest_arc().get_valid_clash_core();
+        feat::patch_config_for_core(&mut config, clash_core.as_str());
 
         Self::runtime().await.edit_draft(|d| {
             *d = IRuntime {
