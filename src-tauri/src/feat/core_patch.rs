@@ -72,6 +72,9 @@ fn patch_for_meow(config: &mut Mapping) {
     }
 
     strip_listener_proxy_fields(config);
+    // meow 无 listener `proxy:` 绑定(spike 项 e):测速专用端口的引流改由栈顶
+    // IN-PORT 规则承担(ADR-0004);实现收在 feat::speedtest,此处只留最小调用点。
+    crate::feat::inject_speedtest_inport_rule(config);
     force_fake_ip_dns_for_tun(config);
 }
 
@@ -158,6 +161,16 @@ mod tests {
         config.insert("dns".into(), dns.into());
         config.insert("profile".into(), profile.into());
         config.insert("listeners".into(), vec![Value::Mapping(listener)].into());
+        // 贴近真实订阅的规则栈:业务规则在前、MATCH 收尾。
+        config.insert(
+            "rules".into(),
+            [
+                Value::from("DOMAIN-SUFFIX,google.com,PROXY"),
+                Value::from("MATCH,DIRECT"),
+            ]
+            .into_iter()
+            .collect::<Value>(),
+        );
         config
     }
 
@@ -381,18 +394,128 @@ mod tests {
         assert_eq!(once, twice, "重复打补丁不得再改动");
     }
 
-    /// 工单 05 接缝占位:meow 分支的测速通道注入点。本票只剔除死字段并保证端口可读,
-    /// IN-PORT 规则注入由工单 05 在 patch_for_meow 内实现(mihomo 分支维持现状)。
+    /// 工单 05(ADR-0004):meow 无 listener `proxy:` 绑定,测速引流改为在规则
+    /// 栈顶注入 `IN-PORT,<测速端口>,GLOBAL`。规则引用的端口必须与测速 listener
+    /// 一致(测速命令靠它找通道),用户规则原序保留,重复打补丁不产生重复注入。
     #[test]
-    fn the_meow_branch_is_where_ticket_05_injects_the_in_port_rule() {
-        // 本测试是接缝的占位断言:工单 05 实现注入后,这里应改为断言
-        // 「栈顶规则 IN-PORT,<测速端口>,GLOBAL 存在且测速恢复路径可用」。
+    fn meow_injects_stack_top_inport_rule_for_the_speedtest_port() {
         let mut config = representative_runtime_config();
+
         patch_config_for_core(&mut config, "verge-meow");
+        // 幂等:真实管线会对同一份草稿多次打补丁,注入不得重复。
+        patch_config_for_core(&mut config, "verge-meow");
+
+        let rules = config.get("rules").and_then(Value::as_sequence).unwrap();
+        assert_eq!(rules.len(), 3, "重复打补丁不得产生重复规则");
+        assert_eq!(
+            rules[0].as_str(),
+            Some("IN-PORT,9666,GLOBAL"),
+            "栈顶必须是引用测速 listener 端口的引流规则"
+        );
+        assert_eq!(rules[1].as_str(), Some("DOMAIN-SUFFIX,google.com,PROXY"), "用户规则原序保留");
+        assert_eq!(rules[2].as_str(), Some("MATCH,DIRECT"));
+        // listener 仍在且端口可读:测速命令依赖它定位通道(工单 03 剔除 proxy 后的接缝)。
+        assert_eq!(crate::feat::speedtest_listener_port(&config), Some(9666));
+    }
+
+    /// 用户自有的 IN-PORT 规则不受注入去重影响;注入只管理自己那条
+    /// (端口与测速 listener 完全一致的 GLOBAL 引流)。
+    #[test]
+    fn meow_keeps_user_inport_rules_while_deduplicating_its_own() {
+        let mut config = representative_runtime_config();
+        config
+            .get_mut("rules")
+            .and_then(Value::as_sequence_mut)
+            .unwrap()
+            .insert(0, Value::from("IN-PORT,8080,PROXY"));
+
+        patch_config_for_core(&mut config, "verge-meow");
+        patch_config_for_core(&mut config, "verge-meow");
+
+        let rules = config.get("rules").and_then(Value::as_sequence).unwrap();
+        assert_eq!(rules[0].as_str(), Some("IN-PORT,9666,GLOBAL"), "测速引流仍在栈顶");
+        assert!(
+            rules.iter().any(|rule| rule.as_str() == Some("IN-PORT,8080,PROXY")),
+            "用户自有 IN-PORT 规则不得被清掉"
+        );
+        assert_eq!(
+            rules
+                .iter()
+                .filter(|rule| rule.as_str() == Some("IN-PORT,9666,GLOBAL"))
+                .count(),
+            1,
+            "注入条目去重"
+        );
+    }
+
+    /// 真实管线顺序(generate_with_profiles:先注入 listener 再打内核补丁):
+    /// 规则里引用的端口必须与 listener 实际注入的端口一致。
+    #[test]
+    fn meow_pipeline_inport_rule_matches_the_injected_listener_port() {
+        let mut config = representative_runtime_config();
+        config.remove("listeners");
+
+        crate::feat::inject_speedtest_listener(&mut config);
+        patch_config_for_core(&mut config, "verge-meow");
+
+        let port = crate::feat::speedtest_listener_port(&config).unwrap();
+        let rules = config.get("rules").and_then(Value::as_sequence).unwrap();
+        assert_eq!(
+            rules[0].as_str(),
+            Some(format!("IN-PORT,{port},GLOBAL").as_str()),
+            "引流规则必须引用 listener 的实际端口"
+        );
+    }
+
+    /// 无测速 listener(端口探测失败等)时不注入引流规则:无通道即无规则,
+    /// 不得凭空给一个无人监听的端口引流。
+    #[test]
+    fn meow_adds_no_inport_rule_without_a_speedtest_listener() {
+        let mut config = representative_runtime_config();
+        config.remove("listeners");
+
+        patch_config_for_core(&mut config, "verge-meow");
+
+        let rules = config.get("rules").and_then(Value::as_sequence).unwrap();
+        assert_eq!(rules.len(), 2, "规则栈保持原样");
+        assert!(
+            !rules
+                .iter()
+                .any(|rule| rule.as_str().is_some_and(|s| s.starts_with("IN-PORT"))),
+            "不得注入引流规则"
+        );
+    }
+
+    /// `rules` 缺失(或非列表)时无法承载引流:移除测速 listener 让测速命令
+    /// 以「通道未就绪」显式失败,而非静默测到默认路由的速度;不凭空发明
+    /// 规则列表(内核启动校验才是规则面的权威)。
+    #[test]
+    fn meow_degrades_the_channel_when_rules_cannot_host_the_inport_rule() {
+        let mut config = representative_runtime_config();
+        config.remove("rules");
+
+        patch_config_for_core(&mut config, "verge-meow");
+
+        assert!(!config.contains_key("rules"), "不得凭空发明规则列表");
         assert_eq!(
             crate::feat::speedtest_listener_port(&config),
-            Some(9666),
-            "工单 05 依赖:补丁后测速 listener 端口仍可读"
+            None,
+            "引流无法注入时测速通道必须显式不可用"
         );
+    }
+
+    /// 回归守护:mihomo 分支的规则栈逐项不变(本票只改 meow 注入侧)。
+    #[test]
+    fn mihomo_leaves_the_rules_stack_untouched() {
+        for core in ["verge-mihomo", "verge-mihomo-alpha"] {
+            let mut config = representative_runtime_config();
+
+            patch_config_for_core(&mut config, core);
+
+            let rules = config.get("rules").and_then(Value::as_sequence).unwrap();
+            assert_eq!(rules.len(), 2, "{core} 规则栈不得变动");
+            assert_eq!(rules[0].as_str(), Some("DOMAIN-SUFFIX,google.com,PROXY"));
+            assert_eq!(rules[1].as_str(), Some("MATCH,DIRECT"));
+        }
     }
 }

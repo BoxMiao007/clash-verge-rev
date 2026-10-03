@@ -191,6 +191,40 @@ fn remove_speedtest_listener(config: &mut Mapping) {
     }
 }
 
+/// meow 下的测速引流:在规则栈顶注入 `IN-PORT,<专用端口>,GLOBAL`(ADR-0004)。
+///
+/// mihomo 的 listener `proxy: GLOBAL` 绑定在 meow 下静默失效(spike 项 e 实测),
+/// 专用端口的流量改由该规则强制推进 GLOBAL;与既有 GLOBAL 读写接缝、恢复日志
+/// 跨内核原样复用,内核分叉只发生在配置注入侧。由 [`crate::feat::patch_config_for_core`]
+/// 的 meow 分支调用(此时 listener 已注入、死 `proxy:` 字段已剔除)。
+///
+/// - 无测速 listener 时不动配置:无通道即无规则,不给无人监听的端口引流;
+/// - `rules` 缺失或非列表时移除测速 listener:引流无处可注,让测速命令以
+///   「通道未就绪」显式失败,而非静默测到默认路由的速度;不凭空发明规则列表,
+///   规则面的合法性交由内核启动校验把关;
+/// - 注入前先剔除同端口的旧条目再插栈顶:重复打补丁幂等,用户自有的
+///   IN-PORT 规则不受影响。
+pub fn inject_speedtest_inport_rule(config: &mut Mapping) {
+    let Some(port) = speedtest_listener_port(config) else {
+        return;
+    };
+    let rule = Value::from(format!("IN-PORT,{port},GLOBAL"));
+
+    let Some(rules) = config.get_mut("rules").and_then(Value::as_sequence_mut) else {
+        logging!(
+            warn,
+            Type::Core,
+            "下载测速:配置无规则列表,meow 下无法注入引流规则,本次生成移除测速通道"
+        );
+        remove_speedtest_listener(config);
+        return;
+    };
+
+    rules.retain(|item| item != &rule);
+    rules.insert(0, rule);
+    logging!(debug, Type::Core, "下载测速:注入 meow 引流规则 IN-PORT,{port},GLOBAL");
+}
+
 /// GLOBAL 恢复日志(崩溃安全):切换前把「原选择 → 被测节点」落盘,恢复成功后删除。
 /// 进程被硬杀(kill -9/断电)时 Drop 守卫不会执行,而 mihomo 会把 GLOBAL 选择
 /// 持久化到 cache.db,残留会跨会话存活;内核启动时按此日志把 GLOBAL 恢复原选择。
