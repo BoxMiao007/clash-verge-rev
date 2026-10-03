@@ -103,7 +103,11 @@ async fn download_via_proxies(url: &str) -> Result<Vec<u8>> {
         {
             Ok(bytes) => return Ok(bytes),
             Err(error) => {
-                logging!(debug, Type::Core, "meow geo update: {url} via {proxy:?} failed: {error:#}");
+                logging!(
+                    debug,
+                    Type::Core,
+                    "meow geo update: {url} via {proxy:?} failed: {error:#}"
+                );
                 last_error = Some(error.context(format!("{proxy:?} could not download {url}")));
             }
         }

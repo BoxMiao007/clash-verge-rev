@@ -132,7 +132,8 @@ async fn publish_staged_core(staged: StagedCore, target: &Path, core: &str, inst
     // running the previous core while the app reports the new version. Sidecar mode runs the
     // file directly and gets no elevation prompt.
     let service_staging = if result.is_ok() && service_mode {
-        result = crate::core::service::stage_approved_core(target).context("core replaced but not accepted by the service");
+        result =
+            crate::core::service::stage_approved_core(target).context("core replaced but not accepted by the service");
         if result.is_ok() {
             ServiceStaging::Succeeded
         } else {
@@ -149,7 +150,9 @@ async fn publish_staged_core(staged: StagedCore, target: &Path, core: &str, inst
             && !TEST_FAIL_RESTART_ONCE.swap(true, std::sync::atomic::Ordering::SeqCst)
         {
             CoreManager::global().stop_core().await;
-            result = Err(anyhow!("injected: the new core died on startup (rollback verification)"));
+            result = Err(anyhow!(
+                "injected: the new core died on startup (rollback verification)"
+            ));
         } else {
             result = CoreManager::global()
                 .restart_core()
@@ -395,7 +398,13 @@ fn meow_asset_target() -> Result<&'static str> {
         .iter()
         .find(|(os, arch, _)| *os == std::env::consts::OS && *arch == std::env::consts::ARCH)
         .map(|(_, _, target)| *target)
-        .ok_or_else(|| anyhow!("no meow release asset for {}-{}", std::env::consts::OS, std::env::consts::ARCH))
+        .ok_or_else(|| {
+            anyhow!(
+                "no meow release asset for {}-{}",
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            )
+        })
 }
 
 /// Pins the meow package to the resolved tag: `meow-<tag>-<target>.zip`(Windows)
@@ -403,7 +412,9 @@ fn meow_asset_target() -> Result<&'static str> {
 fn meow_package_url(version: &str) -> Result<std::string::String> {
     let target = meow_asset_target()?;
     let extension = if cfg!(windows) { "zip" } else { "tar.gz" };
-    Ok(format!("{MEOW_DOWNLOAD_URL}/{version}/meow-{version}-{target}.{extension}"))
+    Ok(format!(
+        "{MEOW_DOWNLOAD_URL}/{version}/meow-{version}-{target}.{extension}"
+    ))
 }
 
 async fn download_meow_package(proxy: ProxyType, version: &str) -> Result<Vec<u8>> {
@@ -549,7 +560,9 @@ fn unpack_meow(package: &[u8], out: &mut File) -> Result<()> {
 fn unpack_meow(package: &[u8], out: &mut File) -> Result<()> {
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(package)).context("invalid meow core archive")?;
     for index in 0..archive.len() {
-        let mut entry = archive.by_index(index).context("failed to read the meow core archive")?;
+        let mut entry = archive
+            .by_index(index)
+            .context("failed to read the meow core archive")?;
         let is_binary = Path::new(entry.name())
             .file_name()
             .map(|name| name == OsStr::new("meow.exe"))
@@ -714,7 +727,10 @@ mod tests {
             );
         }
         // 同一 (os, arch) 只能有一行,否则查找结果取决于行序。
-        let mut keys: Vec<_> = super::MEOW_ASSET_TARGETS.iter().map(|(os, arch, _)| (*os, *arch)).collect();
+        let mut keys: Vec<_> = super::MEOW_ASSET_TARGETS
+            .iter()
+            .map(|(os, arch, _)| (*os, *arch))
+            .collect();
         keys.sort_unstable();
         let total = keys.len();
         keys.dedup();
@@ -725,7 +741,10 @@ mod tests {
     fn meow_asset_target_resolves_for_the_running_host() {
         // 当前平台必须能查到资产:开发自测(linux)与发布(windows)都不能落空。
         let target = meow_asset_target().expect("host platform must map to a meow asset");
-        assert!(target.contains(std::env::consts::ARCH) || target.starts_with("riscv64gc"), "{target}");
+        assert!(
+            target.contains(std::env::consts::ARCH) || target.starts_with("riscv64gc"),
+            "{target}"
+        );
     }
 
     #[test]
@@ -733,7 +752,8 @@ mod tests {
         let url = meow_package_url("v0.21.2").expect("host platform must map to a meow asset");
         // 资产名与官方 release 完全一致(本仓库实测清单):meow-<tag>-<target>.zip|tar.gz。
         #[cfg(windows)]
-        let expected = "https://github.com/meow-rs/meow-rs/releases/download/v0.21.2/meow-v0.21.2-x86_64-pc-windows-msvc.zip";
+        let expected =
+            "https://github.com/meow-rs/meow-rs/releases/download/v0.21.2/meow-v0.21.2-x86_64-pc-windows-msvc.zip";
         #[cfg(not(windows))]
         let expected = "https://github.com/meow-rs/meow-rs/releases/download/v0.21.2/meow-v0.21.2-x86_64-unknown-linux-musl.tar.gz";
         assert_eq!(url, expected);
@@ -775,9 +795,15 @@ mod tests {
         // README——按「第一个条目」或裸 gz 解压都拿不到正确内容。
         let mut builder = tar::Builder::new(Vec::new());
         for (path, data) in [
-            ("meow-v0.21.2-x86_64-unknown-linux-musl/LICENSE", "license text".as_bytes()),
+            (
+                "meow-v0.21.2-x86_64-unknown-linux-musl/LICENSE",
+                "license text".as_bytes(),
+            ),
             ("meow-v0.21.2-x86_64-unknown-linux-musl/README.md", b"readme".as_slice()),
-            ("meow-v0.21.2-x86_64-unknown-linux-musl/meow", b"meow-binary-bytes".as_slice()),
+            (
+                "meow-v0.21.2-x86_64-unknown-linux-musl/meow",
+                b"meow-binary-bytes".as_slice(),
+            ),
         ] {
             let mut header = tar::Header::new_gnu();
             header.set_size(data.len() as u64);

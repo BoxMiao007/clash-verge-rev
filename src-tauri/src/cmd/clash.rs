@@ -105,9 +105,7 @@ pub async fn upgrade_clash_core(force: bool) -> CmdResult<feat::CoreUpgradeRepor
 /// 停内核替换 `-d` 目录下的文件、重启内核生效。
 #[tauri::command]
 pub async fn update_meow_geo() -> CmdResult {
-    feat::update_meow_geo()
-        .await
-        .with_error_code("GEO_UPDATE_FAILED")?;
+    feat::update_meow_geo().await.with_error_code("GEO_UPDATE_FAILED")?;
     handle::Handle::refresh_clash();
     Ok(())
 }
