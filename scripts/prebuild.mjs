@@ -300,6 +300,12 @@ function clashMeta() {
 
 // meow-rs 内核(工单 02):版本钉位在 package.json 的 meowCoreVersion,
 // dev prebuild 与 CI(工单 08)读同一个值;二进制不进 git(src-tauri/.gitignore)。
+// bump 步骤(工单 06):改 package.json 的 meowCoreVersion 前,先对照 meow 仓库
+// docs/mihomo-api-compatibility.md 复核差异面——fork 依赖的假设是:
+//   1. /configs/geo、/upgrade*、/restart 仍在刻意缺口清单(GEO 更新与内核升级
+//      必须继续走 fork 侧通道,见 src-tauri/src/feat/{geo_update,core_upgrade}.rs);
+//   2. 兼容面(version/proxies/configs 读写/rules/providers、四个 WS 端点)未收缩;
+// 复核结论记入 .scratch/meow-rs-core/ 对应工单备注,再改版本号。
 const MEOW_VERSION = (() => {
   const pkg = JSON.parse(
     fs.readFileSync(path.join(cwd, 'package.json'), 'utf8'),
