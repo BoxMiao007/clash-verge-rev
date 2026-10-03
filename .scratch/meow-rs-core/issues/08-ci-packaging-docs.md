@@ -10,7 +10,7 @@
 - [ ] fork-release 工作出包成功(同上) —— **待推送验证**
 - [x] meow 版本号钉在仓库单一位置,bump 只改一处,构建可重现 —— package.json 顶层 `meowCoreVersion: v0.21.2`,`scripts/prebuild.mjs` 读该值拼 release URL,两个工作流与 CI 无第二处版本号
 - [x] ADR:双内核架构、测速 IN-PORT 适配 —— `docs/adr/0003-meow-rs-peer-second-core.md`、`docs/adr/0004-speedtest-inport-adaptation-for-meow.md`(01 已定案不回退,无需回退决策)
-- [x] AGENTS.md 功能清单登记 meow-rs 第二内核 —— 已登记,引入提交留待合并 dev 时补
+- [x] AGENTS.md 功能清单登记 meow-rs 第二内核 —— 已登记,引入提交留待合并 dev 时补(提醒:功能清单「引入提交」列现为占位文本,合并 dev 时必须补上真实哈希)
 - [x] 验证门通过:`pnpm typecheck && pnpm test`(60/60)与 `src-tauri` 下 `cargo check` 全绿
 
 ## Comments
