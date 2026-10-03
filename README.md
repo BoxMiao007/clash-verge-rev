@@ -1,3 +1,17 @@
+<!-- vibe-coding-declaration:begin -->
+> [!IMPORTANT]
+> 本仓库由 AI 开发与维护，所有代码变更均由 AI 执行。
+<!-- vibe-coding-declaration:end -->
+
+<!-- vibe-feature-registry:begin -->
+## 本 Fork 功能清单
+
+| 功能 | 一句话说明 | 关键文件/入口 | 引入提交 |
+| ---- | ---------- | -------------- | -------- |
+| 节点下载测速 | 整组/单项限时下载测速,GLOBAL 专用通道不干扰当前选择,支持按速度排序与自定义 URL/时长/流量上限 | 代理页(按钮与排序)、设置页速度测试卡片 | `037da98a` |
+| meow-rs 平级第二内核 | 设置页与 mihomo 平级一键切换的第二内核(meow-rs,轻量 Rust 重写),单份配置按内核打补丁,能力差异统一灰显。**已知限制**:服务模式与 TUN 暂不可用(Clash Verge Service 仅支持 IPC 控制器而 meow 只有 TCP)、连接页无 UDP 会话、规则页无命中计数、改端口需重启内核;mihomo 专有协议节点(tuic、mieru 等)在 meow 下不可用 | 设置页内核切换、`src-tauri/src/feat/core_patch.rs` | `d00136a2` |
+<!-- vibe-feature-registry:end -->
+
 <h1 align="center">
   <img src="./src-tauri/icons/icon.png" alt="Clash" width="128" />
   <br>

@@ -20,3 +20,4 @@ target
 .env
 *.key
 *.pem
+.zcodeignore
