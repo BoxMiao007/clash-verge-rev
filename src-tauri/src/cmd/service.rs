@@ -8,11 +8,11 @@ use crate::{
     },
 };
 
-#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, PartialEq, Eq, serde::Serialize, specta::Type)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum ServiceInstallOutcome {
     Installed,
-    #[cfg(any(windows, test))]
+    #[cfg_attr(not(any(windows, test)), allow(dead_code))]
     Sidecar {
         reason: String,
     },
@@ -34,7 +34,10 @@ async fn execute_service_operation_sync(status: ServiceStatus, error_code: &str)
         SERVICE_MANAGER.handle_service_status(status).await
     };
     #[cfg(windows)]
-    return finish_service_installation(result, error_code, || manager.continue_with_sidecar()).await;
+    return finish_service_installation(result, error_code, |reason| async move {
+        manager.continue_with_sidecar(Some(&reason)).await
+    })
+    .await;
 
     #[cfg(not(windows))]
     result
@@ -49,7 +52,7 @@ async fn finish_service_installation<Fallback, FallbackFuture>(
     fallback: Fallback,
 ) -> CmdResult<ServiceInstallOutcome>
 where
-    Fallback: FnOnce() -> FallbackFuture,
+    Fallback: FnOnce(String) -> FallbackFuture,
     FallbackFuture: std::future::Future<Output = anyhow::Result<()>>,
 {
     let Err(error) = installation else {
@@ -72,21 +75,20 @@ where
         return Err(proxy_aware_coded_error(&error, error_code));
     }
     let reason = reasons.join("\n");
-    fallback().await.map_err(|error| {
-        proxy_aware_coded_error(
-            &error.context(format!("Service core rejected: {reason}; Sidecar fallback failed")),
-            "SERVICE_SIDECAR_FAILED",
-        )
-    })?;
+    fallback(reason.clone())
+        .await
+        .map_err(|error| proxy_aware_coded_error(&error, "SERVICE_SIDECAR_FAILED"))?;
     Ok(ServiceInstallOutcome::Sidecar { reason })
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn install_service() -> CmdResult<ServiceInstallOutcome> {
     execute_service_operation_sync(ServiceStatus::InstallRequired, "SERVICE_INSTALL_FAILED").await
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn uninstall_service() -> CmdResult {
     CoreManager::global()
         .uninstall_service_and_start_sidecar()
@@ -95,44 +97,58 @@ pub async fn uninstall_service() -> CmdResult {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn reinstall_service() -> CmdResult<ServiceInstallOutcome> {
     execute_service_operation_sync(ServiceStatus::ReinstallRequired, "SERVICE_REINSTALL_FAILED").await
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn repair_service() -> CmdResult<ServiceInstallOutcome> {
     execute_service_operation_sync(ServiceStatus::ForceReinstallRequired, "SERVICE_REPAIR_FAILED").await
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn continue_with_sidecar() -> CmdResult {
     crate::core::CoreManager::global()
-        .continue_with_sidecar()
+        .continue_with_sidecar(None)
         .await
         .map_err(|error| proxy_aware_coded_error(&error, "SERVICE_SIDECAR_FAILED"))
 }
 
 #[tauri::command]
-pub fn take_service_fallback_notice() -> bool {
+#[specta::specta]
+pub fn get_sidecar_failure() -> crate::core::notification::SidecarFailureSnapshot {
+    crate::core::notification::sidecar_failure_snapshot()
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn take_service_fallback_notice() -> Option<crate::core::service::ServiceFallbackNotice> {
     crate::core::service::take_service_fallback_notice()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn get_core_startup_error() -> Option<crate::core::manager::CoreFailure> {
     crate::core::CoreManager::global().get_startup_error()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn take_service_repair_notice() -> bool {
     crate::core::service::take_service_repair_notice()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn take_service_owner_notice() -> Option<String> {
     crate::core::service::take_service_owner_notice()
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn sync_runtime_providers() {
     if matches!(*CoreManager::global().get_running_mode(), RunningMode::Service) {
         request_runtime_provider_sync(timing::RUNTIME_PROVIDER_SETTLE);
@@ -175,7 +191,7 @@ mod tests {
                 None => anyhow::anyhow!("{reason}"),
             }
             .context("install service failed");
-            let result = finish_service_installation(Err(error), "SERVICE_INSTALL_FAILED", || async {
+            let result = finish_service_installation(Err(error), "SERVICE_INSTALL_FAILED", |_| async {
                 fallback_called.set(true);
                 anyhow::ensure!(fallback_ready, "another core is running");
                 Ok(())
@@ -201,7 +217,6 @@ mod tests {
                     })
                 );
                 if rejected {
-                    assert!(error.detail.contains(reason));
                     assert!(error.detail.contains("another core is running"));
                 }
             }

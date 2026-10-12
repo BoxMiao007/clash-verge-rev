@@ -1,17 +1,13 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
+import type { ProfilePatch, ProfileSelection } from '@/services/bindings'
 import { getProfiles, patchProfile, patchProfilesConfig } from '@/services/cmds'
-import {
-  fetchCacheData,
-  revalidateQuery,
-  setCacheData,
-  useQuery,
-} from '@/services/query-client'
+import { mutate } from '@/services/mutate'
+import { migrateProfileTestUrls } from '@/services/proxy-test-url'
+import { fetchCacheData, setCacheData, useQuery } from '@/services/query-client'
 import { debugLog } from '@/utils/debug'
 
 const profilesQueryKey = ['getProfiles'] as const
-
-export const revalidateProfiles = () => revalidateQuery(profilesQueryKey)
 
 export const fetchProfilesIntoCache = () =>
   fetchCacheData(profilesQueryKey, getProfiles)
@@ -40,6 +36,10 @@ export const useProfiles = () => {
     refetchInterval: false,
   })
 
+  useEffect(() => {
+    if (profiles) migrateProfileTestUrls(profiles)
+  }, [profiles])
+
   const refetchRef = useRef(refetch)
   refetchRef.current = refetch
   const mutateProfiles = useCallback(async () => {
@@ -47,18 +47,27 @@ export const useProfiles = () => {
   }, [])
 
   const patchProfiles = useCallback(
-    async (value: Partial<IProfilesConfig>) => {
+    async (value: ProfileSelection) => {
       try {
-        const outcome = await patchProfilesConfig(value)
+        const result = await mutate(() => patchProfilesConfig(value), {
+          id: 'patch-profiles-config',
+          onFulfilled: (outcome) => {
+            if (outcome.status === 'valid') {
+              void setCacheData<IProfilesConfig>(profilesQueryKey, (current) =>
+                current ? { ...current, ...value } : current,
+              )
+            }
+          },
+        })
 
-        if (outcome.status === 'valid') {
-          await setCacheData<IProfilesConfig>(profilesQueryKey, (current) =>
-            current ? { ...current, ...value } : current,
-          )
-        } else if (outcome.status !== 'busy') {
+        if (!result.ok) {
+          // Backend Busy keeps local state untouched, as before.
+          return result.value
+        }
+        const outcome = result.value
+        if (outcome.status !== 'valid' && outcome.status !== 'busy') {
           await mutateProfiles()
         }
-
         return outcome
       } catch (error) {
         await mutateProfiles()
@@ -69,9 +78,13 @@ export const useProfiles = () => {
   )
 
   const patchCurrent = useCallback(
-    async (value: Partial<IProfileItem>) => {
+    async (value: ProfilePatch) => {
       if (profiles?.current) {
-        await patchProfile(profiles.current, value)
+        const uid = profiles.current
+        await mutate(() => patchProfile(uid, value), {
+          id: `patch-profile:${uid}`,
+          errorNotice: false,
+        })
         void mutateProfiles()
       }
     },

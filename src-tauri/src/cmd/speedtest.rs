@@ -8,6 +8,7 @@ use crate::feat;
 /// 下载错误/HTTP 非 2xx/窗口内 0 字节返回明确错误,由前端落入失败态;
 /// 前端另有兜底超时,命令迟迟未返回时落入超时态。
 #[tauri::command]
+#[specta::specta]
 pub async fn speedtest_node(
     name: String,
     url: String,

@@ -51,12 +51,10 @@ static STAGING_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// `.rollback` and `.old` are fixed paths, so two upgrades must not overlap.
 static UPGRADE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, specta::Type)]
 pub struct CoreUpgradeReport {
     /// False when the managed core was already at the latest version.
     pub upgraded: bool,
-    pub from: std::string::String,
-    pub to: std::string::String,
 }
 
 pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
@@ -85,11 +83,7 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
 
     // meow 的 tag 与 `-v` 输出 v 前缀不一致,归一后再比(对 mihomo 无影响)。
     if !force && core_versions_match(&installed, &latest) {
-        return Ok(CoreUpgradeReport {
-            upgraded: false,
-            from: installed,
-            to: latest,
-        });
+        return Ok(CoreUpgradeReport { upgraded: false });
     }
 
     let package = if meow {
@@ -101,11 +95,7 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
 
     publish_staged_core(staged, &target, &core, &installed).await?;
 
-    Ok(CoreUpgradeReport {
-        upgraded: true,
-        from: installed,
-        to: latest,
-    })
+    Ok(CoreUpgradeReport { upgraded: true })
 }
 
 /// staging 验证通过后的共同路径:硬链接保旧、原子发布、服务模式移交、重启,失败自动回滚。
@@ -467,24 +457,31 @@ fn stage_core(target: &Path, package: &[u8], version: &str, core: &str) -> Resul
 }
 
 fn create_staging_file(directory: &Path, core_name: &OsStr) -> Result<(PathBuf, File)> {
-    for _ in 0..32 {
-        let generation = STAGING_GENERATION.fetch_add(1, Ordering::Relaxed);
-        let path = directory.join(format!(
-            ".{}.{}.{generation}.tmp",
-            core_name.to_string_lossy(),
-            std::process::id()
-        ));
+    use crate::utils::retry::{RetryError, RetryPolicy, retry_sync};
+    retry_sync(
+        RetryPolicy::fixed(
+            std::num::NonZeroUsize::MIN.saturating_add(31),
+            std::time::Duration::ZERO,
+        ),
+        |_| {
+            let generation = STAGING_GENERATION.fetch_add(1, Ordering::Relaxed);
+            let path = directory.join(format!(
+                ".{}.{}.{generation}.tmp",
+                core_name.to_string_lossy(),
+                std::process::id()
+            ));
 
-        match File::options().write(true).create_new(true).open(&path) {
-            Ok(file) => return Ok((path, file)),
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(error) => {
-                return Err(error).with_context(|| format!("failed to create {}", path.display()));
+            match File::options().write(true).create_new(true).open(&path) {
+                Ok(file) => Ok((path, file)),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Err(RetryError::Retry(
+                    anyhow::anyhow!("failed to create a unique staging file in {}", directory.display()),
+                )),
+                Err(error) => Err(RetryError::Stop(
+                    anyhow::Error::from(error).context(format!("failed to create {}", path.display())),
+                )),
             }
-        }
-    }
-
-    bail!("failed to create a unique staging file in {}", directory.display())
+        },
+    )
 }
 
 /// 两种内核的压缩包布局不同:mihomo 是扁平单文件(gz/zip),meow 把二进制放在

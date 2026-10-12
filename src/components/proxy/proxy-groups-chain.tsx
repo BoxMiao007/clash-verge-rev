@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next'
 
 import { useProxiesData } from '@/providers/app-data-context'
 import { updateProxyChainConfigInRuntime } from '@/services/cmds'
+import { mutate } from '@/services/mutate'
 import {
   isInteractableMember,
   type ProxyGroupView,
@@ -404,17 +405,26 @@ export function ProxyGroupsChain(props: ProxyGroupsChainProps) {
     setRuleMenuAnchor(null)
   }
 
-  const handleGroupSelect = (groupName: string) => {
-    onGroupSelect(groupName)
-    handleGroupMenuClose()
-
+  const handleGroupSelect = async (groupName: string) => {
     if (mode === 'rule') {
-      updateProxyChainConfigInRuntime(null)
+      try {
+        const result = await mutate(
+          () => updateProxyChainConfigInRuntime(null),
+          {
+            id: 'update-proxy-chain-runtime',
+          },
+        )
+        if (!result.ok) return
+      } catch {
+        return
+      }
       localStorage.removeItem('proxy-chain-group')
       localStorage.removeItem('proxy-chain-exit-node')
       localStorage.removeItem('proxy-chain-items')
       setProxyChain([])
     }
+    onGroupSelect(groupName)
+    handleGroupMenuClose()
   }
 
   const handleCloseDuplicateWarning = useCallback(() => {

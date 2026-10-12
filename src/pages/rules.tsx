@@ -14,8 +14,8 @@ import { ProviderButton } from '@/components/rule/provider-button'
 import RuleItem from '@/components/rule/rule-item'
 import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import { useVisibility } from '@/hooks/use-visibility'
-import { getCoreDisplayName } from '@/services/core-capabilities'
 import { useAppRefreshers, useRulesData } from '@/providers/app-data-context'
+import { getCoreDisplayName } from '@/services/core-capabilities'
 
 const RulesPage = () => {
   const { t } = useTranslation()

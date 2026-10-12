@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { getCoreCapabilities as fetchCoreCapabilities } from './cmds'
 
 /** 内核升级/GEO 更新的执行通道归属:内核自带接口,还是由 fork 侧命令托管。 */
 type CoreUpdateChannel = 'kernelApi' | 'forkSide'
@@ -43,10 +43,11 @@ export const normalizeCoreCapabilities = (
   raw?: ICoreCapabilities | null,
 ): ICoreCapabilities => raw ?? MIHOMO_BASELINE
 
-/** 当前内核的显示名;内核命名映射的唯一前端消费点(use-clash 等)。 */
-export const getCoreDisplayName = (core?: string): string =>
+/** 当前内核的显示名;内核命名映射的唯一前端消费点(use-clash 等)。
+ * 入参来自 bindings 的 IVerge(clash_core 为可空字段),null 与未配置同样按默认内核处理。 */
+export const getCoreDisplayName = (core?: string | null): string =>
   core === 'verge-meow' ? 'Meow' : 'Mihomo'
 
 export async function getCoreCapabilities(): Promise<ICoreCapabilities> {
-  return invoke<ICoreCapabilities>('get_core_capabilities')
+  return fetchCoreCapabilities()
 }

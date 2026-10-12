@@ -13,6 +13,7 @@ import { useDisplayedMixedPort } from '@/hooks/use-displayed-mixed-port'
 import { useProfiles } from '@/hooks/use-profiles'
 import { useVerge } from '@/hooks/use-verge'
 import { invoke_uwp_tool, setDnsOverride, updateMeowGeo } from '@/services/cmds'
+import { mutate } from '@/services/mutate'
 import { showNotice } from '@/services/notice-service'
 import getSystem from '@/utils/get-system'
 
@@ -40,7 +41,7 @@ const SettingClash = ({ onError }: Props) => {
   const { verge, mutateVerge } = useVerge()
   const { current: currentProfile } = useProfiles()
   const dnsEnabled = currentProfile
-    ? (verge?.profile_dns_settings?.[currentProfile.uid]?.enabled ??
+    ? (verge?.profile_dns_settings?.[currentProfile.uid!]?.enabled ??
       verge?.enable_dns_settings ??
       false)
     : false
@@ -79,11 +80,16 @@ const SettingClash = ({ onError }: Props) => {
     try {
       // meow 没有 mihomo 的 /configs/geo API(工单 06):fork 侧下载替换 GEO 文件并重启内核;
       // 通道归属由 Rust 侧能力模型判定,前端按 geoUpdateChannel 分流(工单 07)。
-      if (capabilities.geoUpdateChannel === 'forkSide') {
-        await updateMeowGeo()
-      } else {
-        await updateGeo()
-      }
+      await mutate(
+        () =>
+          capabilities.geoUpdateChannel === 'forkSide'
+            ? updateMeowGeo()
+            : updateGeo(),
+        {
+          id: 'update-geo',
+          errorNotice: false,
+        },
+      )
       showNotice.success('settings.feedback.notifications.clash.geoDataUpdated')
     } catch (err: any) {
       showNotice.error(err)
@@ -99,7 +105,15 @@ const SettingClash = ({ onError }: Props) => {
       if (!profileUid) return
       setDnsUpdating(true)
       try {
-        const outcome = await setDnsOverride(profileUid, enable, confirmation)
+        const result = await mutate(
+          () => setDnsOverride(profileUid, enable, confirmation),
+          {
+            id: 'set-dns-override',
+            errorNotice: false,
+          },
+        )
+        if (!result.ok) return
+        const outcome = result.value
         if (outcome.status === 'confirmation_required') {
           setDnsConfirmation({ profileUid, source: outcome.source })
         } else {

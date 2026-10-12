@@ -2,7 +2,7 @@ use serde::Serialize;
 use serde_yaml_ng::Mapping;
 
 /// 内核升级/GEO 更新的执行通道归属:内核自带接口,还是由 fork 侧命令托管。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum UpdateChannel {
     KernelApi,
@@ -10,7 +10,7 @@ pub enum UpdateChannel {
 }
 
 /// 内核能力:某内核实现对外支持的操作与特性集合(GLOSSARY「内核能力」)。
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CoreCapabilities {
     pub core: String,

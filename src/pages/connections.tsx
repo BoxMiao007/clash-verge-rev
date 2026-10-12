@@ -44,6 +44,7 @@ import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVisibility } from '@/hooks/use-visibility'
 import { getCoreDisplayName } from '@/services/core-capabilities'
+import { mutate } from '@/services/mutate'
 import parseTraffic from '@/utils/parse-traffic'
 
 type OrderFunc = (list: IConnectionsItem[]) => IConnectionsItem[]
@@ -157,7 +158,12 @@ const ConnectionsPage = () => {
     [connectionsType, filterConn],
   )
 
-  const onCloseAll = useLockFn(closeAllConnections)
+  const onCloseAll = useLockFn(() =>
+    mutate(() => closeAllConnections(), {
+      id: 'close-all-connections',
+      errorNotice: false,
+    }),
+  )
 
   const handleSearch = useCallback(
     (match: (content: string) => boolean, state: SearchState) => {

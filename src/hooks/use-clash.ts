@@ -10,6 +10,7 @@ import {
   patchClashConfig,
 } from '@/services/cmds'
 import { getCoreDisplayName } from '@/services/core-capabilities'
+import { mutate } from '@/services/mutate'
 import {
   revalidateQuery,
   setCacheData,
@@ -107,8 +108,11 @@ export const useClash = () => {
   }
 
   const patchClash = useLockFn(async (patch: Partial<IConfigData>) => {
-    await patchClashConfig(patch)
-    mutateClash()
+    await mutate(() => patchClashConfig(patch), {
+      id: 'patch-clash-config',
+      revalidate: [['getRuntimeConfig']],
+      errorNotice: false,
+    })
   })
 
   // meow 与 mihomo 同样返回 meta:true(mihomo 兼容标记),后缀按当前内核取名而非写死。
@@ -137,9 +141,11 @@ export const useClashInfo = () => {
 
     validatePorts(patch)
 
-    await patchClashConfig(patch)
-    mutateInfo()
-    revalidateQuery(['getClashConfig'])
+    await mutate(() => patchClashConfig(patch), {
+      id: 'patch-clash-info',
+      revalidate: [['getClashInfo'], ['getClashConfig']],
+      errorNotice: false,
+    })
   })
 
   const invalidateClashConfig = () => revalidateQuery(['getClashConfig'])

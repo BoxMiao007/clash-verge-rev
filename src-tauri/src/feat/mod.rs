@@ -4,6 +4,8 @@ mod config;
 mod core_patch;
 mod core_upgrade;
 mod dns;
+mod effects;
+mod executor;
 mod geo_update;
 mod icon;
 mod listener;

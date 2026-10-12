@@ -41,7 +41,7 @@ const MAX_SPEEDTEST_MAX_MB: u64 = 1024;
 
 /// IPC 返回给前端的结构:与仓库约定一致用驼峰键(Tauri 不改写命令返回值的
 /// 字段名,前端按此契约读取,见下方契约测试)。
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SpeedTestResult {
     /// 窗口内实际收到的字节数(解压后)。

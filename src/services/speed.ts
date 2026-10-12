@@ -1,5 +1,3 @@
-import { invoke } from '@tauri-apps/api/core'
-
 import type {
   InteractableProxyMember,
   ResolvedProxyMember,
@@ -12,6 +10,8 @@ import {
   DEFAULT_SPEEDTEST_WINDOW_SECS,
 } from '@/utils/speed'
 
+import { speedtestNode } from './cmds'
+
 type SpeedSnapshot = {
   of: (member: ResolvedProxyMember) => number
 }
@@ -23,13 +23,6 @@ export interface SpeedUpdate {
   speed: number
   elapsed?: number
   updatedAt: number
-}
-
-/** 后端命令 speedtest_node 的返回值。 */
-interface SpeedTestResult {
-  bytes: number
-  elapsedMs: number
-  speedBps: number
 }
 
 const CACHE_TTL = 30 * 60 * 1000
@@ -237,7 +230,13 @@ class SpeedManager {
     windowSecs: number = DEFAULT_SPEEDTEST_WINDOW_SECS,
     maxBytes?: number,
   ): Promise<SpeedUpdate> {
-    const update = await this.measureSpeed(member, group, url, windowSecs, maxBytes)
+    const update = await this.measureSpeed(
+      member,
+      group,
+      url,
+      windowSecs,
+      maxBytes,
+    )
     this.queueGroupNotification(group)
     return update
   }
@@ -268,14 +267,9 @@ class SpeedManager {
         setTimeout(() => resolve(SPEED_TIMEOUT), windowSecs * 1000 + 10_000)
       })
 
-      // maxBytes 为 undefined 时 JSON 序列化会丢弃该键,后端 Option 收到 None 即不限。
+      // maxBytes 归一为 null:serde Option 收到 None 即不限流量。
       const result = await Promise.race([
-        invoke<SpeedTestResult>('speedtest_node', {
-          name: apiName,
-          url,
-          durationSecs: windowSecs,
-          maxBytes,
-        }),
+        speedtestNode(apiName, url, windowSecs, maxBytes ?? null),
         fallback,
       ])
 
