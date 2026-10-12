@@ -28,6 +28,15 @@ tag 已在远端,无需重推;dispatch 走 fork-release.yml 的 workflow_dispatc
 
 **Status:** ready-for-agent(前置条件:2026-11-01 额度重置;届时用户说「发」即执行)
 
+**根因确诊(2026-10-12,依据 Billing 页截图):** 10 月计费用量 $44.05 =
+免费档包含额度(2,000 分钟 + 500MB 存储)被全额吃满(clash-verge-rev $35.62 +
+pixel-arena $7.17 + 其他零头)。账户未绑付款方式,GitHub 按规则
+"额度用完且无付款方式 → 封停 Actions"。clash-verge-rev 的分钟按私有仓库费率
+计了账(构建期间仓库为私有;现已是公开,公开仓库标准 runner 分钟免费),
+成本大头是 Auto Build 矩阵里的 macOS job($0.062/分钟,10 倍单价)。
+仓库现转公开 + Auto Build 已禁用,fork 发布构建今后不再消耗额度;
+11 月 1 日月度重置后自动解封。
+
 **注意:**
 
 - Auto Build(上游残留的每日两次 3 平台构建)已为 disabled_manually——这是额度
