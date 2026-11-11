@@ -3,6 +3,7 @@ import { useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BaseDialog } from '@/components/base'
+import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import { useDialogFailure } from '@/pages/_layout/hooks'
 import {
   installService,
@@ -97,6 +98,9 @@ export const SysproxyPrivilegeDialog = () => {
   const reason = request?.reason ?? 'sysproxyRefused'
   const remedy = remedyFor(reason)
   const restoring = request?.restore
+  // meow 等内核无法被外部服务托管;仅 install/reinstall 路径需要拦截,restartOnly 仍可放行。
+  const { serviceHosting } = useCoreCapabilities()
+  const serviceBlocked = !serviceHosting && remedy !== 'restartOnly'
 
   const close = () => {
     clearServiceRequest()
@@ -104,6 +108,13 @@ export const SysproxyPrivilegeDialog = () => {
   }
 
   const handleFix = async () => {
+    if (serviceBlocked) {
+      showNotice.warning(
+        'settings.feedback.notifications.clashService.coreNotHostable',
+        0,
+      )
+      return
+    }
     try {
       let outcome: ServiceInstallOutcome | undefined
       if (remedy === 'reinstallAndRestart') {
@@ -187,6 +198,7 @@ export const SysproxyPrivilegeDialog = () => {
       )}
       cancelBtn={t('layout.components.sysproxyPrivilege.later')}
       // Keep the primary spinner visible; only cancellation is unavailable.
+      disableOk={serviceBlocked}
       disableCancel={loading}
       loading={loading}
       onOk={() => void handleFix()}
@@ -194,7 +206,9 @@ export const SysproxyPrivilegeDialog = () => {
       onClose={close}
     >
       <Alert severity={loading ? 'info' : 'warning'} sx={{ mb: 1.5 }}>
-        {t(step !== 'idle' ? STEP_MESSAGE[step] : EXPLANATION[reason])}
+        {serviceBlocked
+          ? t('settings.feedback.notifications.clashService.coreNotHostable')
+          : t(step !== 'idle' ? STEP_MESSAGE[step] : EXPLANATION[reason])}
       </Alert>
       {loading && <LinearProgress />}
       {!loading && reason === 'sysproxyRefused' && (

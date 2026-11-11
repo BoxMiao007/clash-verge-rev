@@ -1,4 +1,4 @@
-import { Alert, Box } from '@mui/material'
+import { Box } from '@mui/material'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -12,11 +12,11 @@ import {
 import { ScrollTopButton } from '@/components/layout/scroll-top-button'
 import { ProviderButton } from '@/components/rule/provider-button'
 import RuleItem from '@/components/rule/rule-item'
+import { CapabilityNotice } from '@/components/shared/capability-notice'
 import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import { usePageSearch } from '@/hooks/use-page-search'
 import { useVisibility } from '@/hooks/use-visibility'
 import { useAppRefreshers, useRulesData } from '@/providers/app-data-context'
-import { getCoreDisplayName } from '@/services/core-capabilities'
 
 const RulesPage = () => {
   const { t } = useTranslation()
@@ -88,13 +88,12 @@ const RulesPage = () => {
         />
       </Box>
 
-      {!capabilities.ruleHitCounting && (
-        <Alert severity="info" variant="outlined" sx={{ mx: '10px', mb: 0.5 }}>
-          {t('rules.page.notices.hitCountUnavailable', {
-            core: getCoreDisplayName(capabilities.core),
-          })}
-        </Alert>
-      )}
+      <CapabilityNotice
+        active={!capabilities.ruleHitCounting}
+        message="rules.page.notices.hitCountUnavailable"
+        core={capabilities.core}
+        sx={{ mx: '10px', mb: 0.5 }}
+      />
 
       {filteredRules && filteredRules.length > 0 ? (
         <>

@@ -13,7 +13,7 @@ import WifiTetheringOffRounded from '@mui/icons-material/WifiTetheringOffRounded
 import WifiTetheringRounded from '@mui/icons-material/WifiTetheringRounded'
 import { Box, IconButton, type SxProps, TextField } from '@mui/material'
 import { useDebounceFn } from 'ahooks'
-import { memo, useEffect, useRef } from 'react'
+import { createElement, memo, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -39,6 +39,14 @@ interface Props {
   onSpeedCheck: () => void
   onHeadState: (val: Partial<HeadState>) => void
 }
+
+/** 排序按钮的四种状态:提示文案与图标按 sortType 顺序一一对应。 */
+const SORT_STEPS = [
+  { tooltip: 'proxies.page.tooltips.sortDefault', icon: SortRounded },
+  { tooltip: 'proxies.page.tooltips.sortDelay', icon: AccessTimeRounded },
+  { tooltip: 'proxies.page.tooltips.sortName', icon: SortByAlphaRounded },
+  { tooltip: 'proxies.page.tooltips.sortSpeed', icon: BoltRounded },
+] as const
 
 export const ProxyGroupTools = memo(function ProxyGroupTools(props: Props) {
   const {
@@ -211,14 +219,7 @@ export const ProxyGroupTools = memo(function ProxyGroupTools(props: Props) {
       <IconButton
         size="small"
         color="inherit"
-        title={
-          [
-            t('proxies.page.tooltips.sortDefault'),
-            t('proxies.page.tooltips.sortDelay'),
-            t('proxies.page.tooltips.sortName'),
-            t('proxies.page.tooltips.sortSpeed'),
-          ][sortType]
-        }
+        title={t(SORT_STEPS[sortType].tooltip)}
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
@@ -226,16 +227,11 @@ export const ProxyGroupTools = memo(function ProxyGroupTools(props: Props) {
             // eslint-disable-next-line @eslint-react/dom-no-flush-sync
             flushSync(() => onHeadState({ open: true }))
           onHeadState({
-            sortType: ((sortType + 1) % 4) as ProxySortType,
+            sortType: ((sortType + 1) % SORT_STEPS.length) as ProxySortType,
           })
         }}
       >
-        {sortType !== 1 && sortType !== 2 && sortType !== 3 && (
-          <SortRounded fontSize="inherit" />
-        )}
-        {sortType === 1 && <AccessTimeRounded fontSize="inherit" />}
-        {sortType === 2 && <SortByAlphaRounded fontSize="inherit" />}
-        {sortType === 3 && <BoltRounded fontSize="inherit" />}
+        {createElement(SORT_STEPS[sortType].icon, { fontSize: 'inherit' })}
       </IconButton>
 
       <IconButton

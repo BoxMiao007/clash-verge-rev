@@ -32,11 +32,7 @@ import {
   type ResolvedProxyMember,
 } from '@/types/proxy-view'
 import { debugLog } from '@/utils/debug'
-import {
-  resolveSpeedtestDurationSecs,
-  resolveSpeedtestMaxBytes,
-  resolveSpeedtestUrl,
-} from '@/utils/speed'
+import { resolveSpeedtestOptions } from '@/utils/speed'
 
 import type { ProxyChainItem } from './proxy-chain-model'
 import { ProxyEmptyState } from './proxy-empty-state'
@@ -121,31 +117,28 @@ function useProxyRenderState(
   const timeout = verge?.default_latency_timeout || 10000
 
   // 与单项测速(use-proxy-speed-state)同一来源:verge 设置经解析函数落到内置默认。
-  const speedtestUrl = resolveSpeedtestUrl(verge?.default_speedtest_url)
-  const speedtestDurationSecs = resolveSpeedtestDurationSecs(
-    verge?.default_speedtest_duration,
-  )
-  const speedtestMaxBytes = resolveSpeedtestMaxBytes(
-    verge?.default_speedtest_max_mb,
+  const speedtest = resolveSpeedtestOptions(verge)
+
+  // 两个批量测速入口共用:按组名取该组可交互成员(GLOBAL 伪组同样适用)。
+  const interactableMembers = useCallback(
+    (groupName: string) => {
+      if (!proxyView) return []
+      const group =
+        proxyView.groups.find(({ name }) => name === groupName) ??
+        (proxyView.global?.name === groupName ? proxyView.global : undefined)
+      if (!group) return []
+      return group.members
+        .map((member) => resolveMember(proxyView, member))
+        .filter(isInteractableMember)
+    },
+    [proxyView],
   )
 
   const handleCheckAll = useStableCallback(
     useLockFn(async (groupName: string) => {
       debugLog(`[ProxyGroups] 开始测试所有延迟，组: ${groupName}`)
 
-      const group =
-        proxyView?.groups.find(({ name }) => name === groupName) ??
-        (proxyView?.global?.name === groupName ? proxyView.global : undefined)
-      const occurrences =
-        proxyView && group
-          ? group.members.map((member, memberIndex) => ({
-              memberIndex,
-              member: resolveMember(proxyView, member),
-            }))
-          : []
-      const interactable = occurrences
-        .map(({ member }) => member)
-        .filter(isInteractableMember)
+      const interactable = interactableMembers(groupName)
 
       debugLog(`[ProxyGroups] 找到代理数量: ${interactable.length}`)
 
@@ -167,32 +160,20 @@ function useProxyRenderState(
     useLockFn(async (groupName: string) => {
       debugLog(`[ProxyGroups] 开始测试所有下载速度，组: ${groupName}`)
 
-      const group =
-        proxyView?.groups.find(({ name }) => name === groupName) ??
-        (proxyView?.global?.name === groupName ? proxyView.global : undefined)
-      const occurrences =
-        proxyView && group
-          ? group.members.map((member, memberIndex) => ({
-              memberIndex,
-              member: resolveMember(proxyView, member),
-            }))
-          : []
-      const interactable = occurrences
-        .map(({ member }) => member)
-        .filter(isInteractableMember)
+      const interactable = interactableMembers(groupName)
 
       debugLog(`[ProxyGroups] 找到代理数量: ${interactable.length}`)
       debugLog(
-        `[ProxyGroups] 测速URL: ${speedtestUrl}, 测速窗口: ${speedtestDurationSecs}s`,
+        `[ProxyGroups] 测速URL: ${speedtest.url}, 测速窗口: ${speedtest.durationSecs}s`,
       )
 
       try {
         await speedManager.checkListSpeed(
           interactable,
           groupName,
-          speedtestUrl,
-          speedtestDurationSecs,
-          speedtestMaxBytes,
+          speedtest.url,
+          speedtest.durationSecs,
+          speedtest.maxBytes,
         )
         debugLog(`[ProxyGroups] 速度测试完成，组: ${groupName}`)
       } catch (error) {

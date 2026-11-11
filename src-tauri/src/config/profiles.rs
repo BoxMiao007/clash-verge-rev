@@ -641,6 +641,11 @@ fn global_exit_target(proxies: &Proxies) -> Option<&str> {
 }
 
 /// Moves GLOBAL off a built-in unless the profile records any GLOBAL choice.
+///
+/// 「有记录」以 profile.selected 里是否出现 GLOBAL 为准:用户显式选中内建项(DIRECT 等)
+/// 同样会经 `record_selected_node` 留下记录,因此不会被移出;测速恢复日志还原的**用户原选择**
+/// 也受同一保护。只有「GLOBAL 从未被选择、停在默认内建态」时才会被移出,这是上游该行为的本意
+/// (交互核查见 docs/adr/0001 备注)。
 pub(crate) async fn leave_default_global_exit() -> Result<()> {
     let profiles = Config::profiles().await.data_arc();
     let has_record = profiles
@@ -1433,6 +1438,33 @@ mod tests {
         assert_eq!(plan.selected, vec![selected("group", "current")]);
         assert!(plan.activations.is_empty());
         assert_eq!(plan.repaired_count, 1);
+    }
+
+    #[test]
+    fn global_moves_off_a_builtin_default_to_the_first_visible_group() {
+        let snapshot = proxies(vec![
+            ("GLOBAL", &["DIRECT", "Group", "REJECT"], Some("DIRECT")),
+            ("Group", &["a"], Some("a")),
+        ]);
+
+        assert_eq!(global_exit_target(&snapshot), Some("Group"));
+    }
+
+    #[test]
+    fn global_left_on_a_real_selection_is_not_moved() {
+        let snapshot = proxies(vec![
+            ("GLOBAL", &["DIRECT", "Group"], Some("Group")),
+            ("Group", &["a"], Some("a")),
+        ]);
+
+        assert_eq!(global_exit_target(&snapshot), None);
+    }
+
+    #[test]
+    fn missing_global_has_no_exit_target() {
+        let snapshot = proxies(vec![("Group", &["a"], Some("a"))]);
+
+        assert_eq!(global_exit_target(&snapshot), None);
     }
 
     #[test]

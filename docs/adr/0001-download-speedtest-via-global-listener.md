@@ -17,3 +17,7 @@ mihomo 没有按节点测带宽的 API(延迟端点只返回 TTFB),下载测速�
 - 启动时无条件重置 GLOBAL:实现最简单,但会覆盖用户在 global 模式下的合法选择持久化,弃用。
 - 不处理、接受残留:零成本,但 global 模式用户可能长时间流量走错节点,弃用。
 - 恢复失败后保留日志反复重试:节点永久消失时每次启动都失败一次,无收敛收益,弃用(保留日志仅限「GLOBAL 读取失败」这类瞬时故障)。
+
+## 备注(2026-11-11):与上游「GLOBAL 默认退出」逻辑的交互
+
+上游 84bbe790 新增 `leave_default_global_exit`:global 模式下激活 profile 时,若当前 profile 未记录任何 GLOBAL 选择、且 GLOBAL 停在 DIRECT/REJECT 等内建项,则把它移到首个可见分组。核查结论:用户显式选择(含显式选 DIRECT)会经 `record_selected_node` 写入 profile 的 `selected`,因此本恢复日志还原出的**用户原选择**不会被移走;只有「GLOBAL 从未被选择、处于默认内建态」时才会被移出,这与上游该改动的本意一致,不构成本功能的回归。故不据此改动行为,仅以 `global_exit_target` 单测锁定该语义。

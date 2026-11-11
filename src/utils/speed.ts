@@ -163,3 +163,22 @@ export const resolveSpeedtestMaxBytes = (
   }
   return configured * BYTES_PER_MB
 }
+
+/** 一次测速的三要素:下载 URL、时长窗口(秒)、流量上限(字节,undefined=不限)。
+ *  单项测速与整组测速共用同一解析入口,避免设置解析在两处各写一遍。 */
+export interface SpeedtestOptions {
+  url: string
+  durationSecs: number
+  maxBytes: number | undefined
+}
+
+/** 从 verge 设置解析测速三要素;未配置项各自落到内置默认(单项/整组一致)。 */
+export const resolveSpeedtestOptions = (verge?: {
+  default_speedtest_url?: string | null
+  default_speedtest_duration?: number | null
+  default_speedtest_max_mb?: number | null
+}): SpeedtestOptions => ({
+  url: resolveSpeedtestUrl(verge?.default_speedtest_url),
+  durationSecs: resolveSpeedtestDurationSecs(verge?.default_speedtest_duration),
+  maxBytes: resolveSpeedtestMaxBytes(verge?.default_speedtest_max_mb),
+})

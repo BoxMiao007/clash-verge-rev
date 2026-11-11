@@ -5,7 +5,6 @@ import {
   ViewColumnRounded,
 } from '@mui/icons-material'
 import {
-  Alert,
   Box,
   Button,
   ButtonGroup,
@@ -37,13 +36,13 @@ import {
   useConnectionRowViews,
 } from '@/components/connection/connection-row-view'
 import { ConnectionTable } from '@/components/connection/connection-table'
+import { CapabilityNotice } from '@/components/shared/capability-notice'
 import { useConnectionData } from '@/hooks/use-connection-data'
 import { useConnectionSetting } from '@/hooks/use-connection-setting'
 import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import { usePageSearch } from '@/hooks/use-page-search'
 import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVisibility } from '@/hooks/use-visibility'
-import { getCoreDisplayName } from '@/services/core-capabilities'
 import { mutate } from '@/services/mutate'
 import parseTraffic from '@/utils/parse-traffic'
 
@@ -234,13 +233,12 @@ const ConnectionsPage = () => {
         </Box>
       }
     >
-      {!capabilities.udpConnectionTracking && (
-        <Alert severity="info" variant="outlined" sx={{ mx: '10px', mt: 1 }}>
-          {t('connections.page.notices.udpUnavailable', {
-            core: getCoreDisplayName(capabilities.core),
-          })}
-        </Alert>
-      )}
+      <CapabilityNotice
+        active={!capabilities.udpConnectionTracking}
+        message="connections.page.notices.udpUnavailable"
+        core={capabilities.core}
+        sx={{ mx: '10px', mt: 1 }}
+      />
       <Box
         sx={{
           pt: 1,

@@ -16,9 +16,14 @@ const store = vi.hoisted(() => ({
   runState: null as RunState | null,
 }))
 
+const capabilities = vi.hoisted(() => ({ serviceHosting: true }))
+
 vi.mock('react', () => ({ useState: vi.fn() }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}))
+vi.mock('@/hooks/use-core-capabilities', () => ({
+  useCoreCapabilities: () => ({ serviceHosting: capabilities.serviceHosting }),
 }))
 vi.mock('@mui/material', () => ({ Alert: 'div' }))
 vi.mock('@/components/base', () => ({ BaseDialog: 'dialog' }))
@@ -38,6 +43,7 @@ vi.mock('@/services/notice-service', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   store.runState = null
+  capabilities.serviceHosting = true
   vi.mocked(useState)
     .mockReturnValueOnce([false, vi.fn()])
     .mockReturnValueOnce([false, vi.fn()])
@@ -104,3 +110,21 @@ it.each([
     expect(ServiceMigrationDialog().props.disableCancel).toBe(false)
   },
 )
+
+it('blocks service installation when the current core cannot be hosted', () => {
+  capabilities.serviceHosting = false
+  store.runState = {
+    service: 'notInstalled',
+    mode: 'NotRunning',
+  } as unknown as RunState
+
+  const dialog = ServiceMigrationDialog()
+
+  expect(dialog.props.disableOk).toBe(true)
+  dialog.props.onOk()
+  expect(showNotice.warning).toHaveBeenCalledWith(
+    'settings.feedback.notifications.clashService.coreNotHostable',
+    0,
+  )
+  expect(installService).not.toHaveBeenCalled()
+})
