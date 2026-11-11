@@ -168,7 +168,7 @@ const misc = {
 } satisfies GroupDefaults
 
 const speedtest = {
-  section: 'settings.components.verge.basic.title',
+  section: 'settings.page.title',
   path: 'settings.components.verge.speedtest.title',
   aliases: 'speedtest speed test download 测速 下载测速',
 } satisfies GroupDefaults

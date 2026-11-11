@@ -7,12 +7,7 @@ import {
   isInteractableMember,
   type ResolvedProxyMember,
 } from '@/types/proxy-view'
-import {
-  SPEED_TESTING,
-  resolveSpeedtestDurationSecs,
-  resolveSpeedtestMaxBytes,
-  resolveSpeedtestUrl,
-} from '@/utils/speed'
+import { SPEED_TESTING, resolveSpeedtestOptions } from '@/utils/speed'
 
 const PRESET_PROXY_NAMES = [
   'DIRECT',
@@ -42,13 +37,7 @@ export function useProxySpeedState(
   const isPreset = unresolved || PRESET_PROXY_NAMES.includes(name)
   const [speedState, setSpeedState] = useReducer(identity, INITIAL_SPEED)
   const { verge } = useVerge()
-  const speedtestUrl = resolveSpeedtestUrl(verge?.default_speedtest_url)
-  const speedtestDurationSecs = resolveSpeedtestDurationSecs(
-    verge?.default_speedtest_duration,
-  )
-  const speedtestMaxBytes = resolveSpeedtestMaxBytes(
-    verge?.default_speedtest_max_mb,
-  )
+  const speedtest = resolveSpeedtestOptions(verge)
 
   useEffect(() => {
     if (isPreset) return
@@ -84,9 +73,9 @@ export function useProxySpeedState(
       await speedManager.checkSpeed(
         member,
         groupName,
-        speedtestUrl,
-        speedtestDurationSecs,
-        speedtestMaxBytes,
+        speedtest.url,
+        speedtest.durationSecs,
+        speedtest.maxBytes,
       ),
     )
   })

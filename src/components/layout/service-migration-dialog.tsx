@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BaseDialog } from '@/components/base'
+import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
 import {
   continueWithSidecar,
   installService,
@@ -17,6 +18,8 @@ import { useAppReads, useRunState } from '@/store/app-store-context'
 
 export const ServiceMigrationDialog = () => {
   const { t } = useTranslation()
+  // meow 等内核不支持外部服务托管,服务安装入口据此关闭(能力模型唯一事实源)。
+  const { serviceHosting } = useCoreCapabilities()
   const [loading, setLoading] = useState(false)
   const [stateRefreshFailed, setStateRefreshFailed] = useState(false)
   const [workflowIncomplete, setWorkflowIncomplete] = useState(false)
@@ -68,6 +71,13 @@ export const ServiceMigrationDialog = () => {
   }
 
   const handleServiceAction = async () => {
+    if (!serviceHosting) {
+      showNotice.warning(
+        'settings.feedback.notifications.clashService.coreNotHostable',
+        0,
+      )
+      return
+    }
     setLoading(true)
     setWorkflowIncomplete(true)
     let outcome: ServiceInstallOutcome | undefined
@@ -200,20 +210,22 @@ export const ServiceMigrationDialog = () => {
             : 'layout.components.serviceMigration.reinstall',
       )}
       cancelBtn={t('layout.components.serviceMigration.continueSidecar')}
-      disableOk={checking}
+      disableOk={checking || !serviceHosting}
       disableCancel={checking || !canContinue}
       loading={loading}
       onOk={() => void handleServiceAction()}
       onCancel={() => void handleContinue()}
     >
       <Alert severity="warning">
-        {t(
-          showCheckingMessage
-            ? 'layout.components.serviceMigration.checkingMessage'
-            : remedy === 'reinstall'
-              ? 'layout.components.serviceMigration.message'
-              : 'layout.components.serviceMigration.unavailableMessage',
-        )}
+        {!serviceHosting
+          ? t('settings.feedback.notifications.clashService.coreNotHostable')
+          : t(
+              showCheckingMessage
+                ? 'layout.components.serviceMigration.checkingMessage'
+                : remedy === 'reinstall'
+                  ? 'layout.components.serviceMigration.message'
+                  : 'layout.components.serviceMigration.unavailableMessage',
+            )}
       </Alert>
     </BaseDialog>
   )
