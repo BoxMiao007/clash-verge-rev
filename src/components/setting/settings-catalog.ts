@@ -167,6 +167,12 @@ const misc = {
   aliases: 'misc 杂项',
 } satisfies GroupDefaults
 
+const speedtest = {
+  section: 'settings.components.verge.basic.title',
+  path: 'settings.components.verge.speedtest.title',
+  aliases: 'speedtest speed test download 测速 下载测速',
+} satisfies GroupDefaults
+
 const hotkey = {
   section: 'settings.components.verge.basic.title',
   path: 'settings.modals.hotkey.title',
@@ -493,6 +499,14 @@ const settingsCatalog: readonly SettingEntry[] = [
     'settings.modals.misc.fields.defaultLatencyTest': 'default latency test',
     'settings.modals.misc.fields.defaultLatencyTimeout':
       'default latency timeout',
+  }),
+  ...group(speedtest, {
+    'settings.components.verge.speedtest.fields.speedtestUrl':
+      'speedtest url 测速地址 测速链接',
+    'settings.components.verge.speedtest.fields.speedtestDuration':
+      'speedtest duration 测速时长',
+    'settings.components.verge.speedtest.fields.speedtestMaxMb':
+      'speedtest max mb 流量上限 测速流量',
   }),
   ...group(basic, {
     'settings.components.verge.basic.fields.hotkeySetting': 'hotkey setting ',

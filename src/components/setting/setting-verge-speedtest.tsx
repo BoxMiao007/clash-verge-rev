@@ -57,6 +57,7 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
   return (
     <SettingList title={t('settings.components.verge.speedtest.title')}>
       <SettingItem
+        data-setting-target="settings.components.verge.speedtest.fields.speedtestUrl"
         label={t('settings.components.verge.speedtest.fields.speedtestUrl')}
         extra={
           <TooltipIcon
@@ -82,6 +83,7 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
       </SettingItem>
 
       <SettingItem
+        data-setting-target="settings.components.verge.speedtest.fields.speedtestDuration"
         label={t(
           'settings.components.verge.speedtest.fields.speedtestDuration',
         )}
@@ -129,6 +131,7 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
       </SettingItem>
 
       <SettingItem
+        data-setting-target="settings.components.verge.speedtest.fields.speedtestMaxMb"
         label={t('settings.components.verge.speedtest.fields.speedtestMaxMb')}
         extra={
           <TooltipIcon
