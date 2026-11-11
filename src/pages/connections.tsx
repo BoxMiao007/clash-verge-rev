@@ -25,7 +25,6 @@ import {
   BasePage,
   BaseSearchBox,
   BaseStyledSelect,
-  type SearchState,
   VirtualList,
 } from '@/components/base'
 import {
@@ -41,6 +40,7 @@ import { ConnectionTable } from '@/components/connection/connection-table'
 import { useConnectionData } from '@/hooks/use-connection-data'
 import { useConnectionSetting } from '@/hooks/use-connection-setting'
 import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
+import { usePageSearch } from '@/hooks/use-page-search'
 import { useTrafficData } from '@/hooks/use-traffic-data'
 import { useVisibility } from '@/hooks/use-visibility'
 import { getCoreDisplayName } from '@/services/core-capabilities'
@@ -88,10 +88,8 @@ const ConnectionsPage = () => {
   const pageVisible = useVisibility()
   // 内核能力差异的标注从这里取事实,组件不写内核特判(工单 07)
   const capabilities = useCoreCapabilities()
-  const [match, setMatch] = useState<(input: string) => boolean>(
-    () => () => true,
-  )
-  const [hasSearch, setHasSearch] = useState(false)
+  const { searchState, match, onSearch } = usePageSearch('connections')
+  const hasSearch = searchState.text.length > 0
   const [curOrderOpt, setCurOrderOpt] = useState<OrderKey>('default')
   const [connectionsType, setConnectionsType] = useState<'active' | 'closed'>(
     'active',
@@ -165,13 +163,6 @@ const ConnectionsPage = () => {
     }),
   )
 
-  const handleSearch = useCallback(
-    (match: (content: string) => boolean, state: SearchState) => {
-      setMatch(() => match)
-      setHasSearch(state.text.length > 0)
-    },
-    [],
-  )
   const hasTableData = filterConn.length > 0
 
   return (
@@ -286,7 +277,11 @@ const ConnectionsPage = () => {
             },
           }}
         >
-          <BaseSearchBox onSearch={handleSearch} />
+          <BaseSearchBox
+            defaultValue={searchState.text}
+            {...searchState}
+            onSearch={onSearch}
+          />
         </Box>
         {isTableLayout && hasTableData && (
           <Tooltip title={t('connections.components.columnManager.title')}>

@@ -191,10 +191,6 @@ pub async fn delete_profile(index: std::string::String) -> CmdResult {
     drop(config_update_guard);
     drop(profile_write_guard);
 
-    if should_update {
-        logging_error!(Type::Config, Config::sync_dns_override().await);
-    }
-
     if let Err(e) = Tray::global().update_tooltip().await {
         logging!(warn, Type::Cmd, "异步更新托盘提示失败: {e:#}");
     }
@@ -264,7 +260,6 @@ async fn handle_success(current_value: Option<&String>) -> CmdResult<ValidationO
         handle::Handle::notify_profile_changed(current);
     }
 
-    logging_error!(Type::Config, Config::sync_dns_override().await);
     Ok(ValidationOutcome::Valid)
 }
 
@@ -282,7 +277,9 @@ async fn handle_validation_failure(
 ) -> CmdResult<ValidationOutcome> {
     logging!(warn, Type::Cmd, "配置验证失败: {}", outcome);
     discard_and_restore(current_profile).await?;
-    handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
+    if !matches!(outcome, ValidationOutcome::Busy) {
+        handle_validation_notice(&outcome, ValidationNoticeTarget::Runtime, "运行时配置");
+    }
     Ok(outcome)
 }
 
@@ -311,9 +308,6 @@ async fn perform_config_update(
     current_value: Option<&String>,
     current_profile: Option<&String>,
 ) -> CmdResult<ValidationOutcome> {
-    defer! {
-        CURRENT_SWITCHING_PROFILE.store(false, Ordering::Release);
-    }
     let update_result = run_profile_config_update_transition(|| CoreManager::global().update_config_forced()).await;
 
     match update_result {
@@ -373,8 +367,6 @@ pub struct ProfilePatch {
     #[specta(type = Option<std::string::String>)]
     pub url: Option<String>,
     pub selected: Option<Vec<crate::config::PrfSelected>>,
-    #[specta(type = Option<std::collections::BTreeMap<std::string::String, std::string::String>>)]
-    pub latency_test_urls: Option<std::collections::BTreeMap<String, String>>,
     pub extra: Option<crate::config::PrfExtra>,
     pub updated: Option<usize>,
     pub option: Option<PrfOption>,
@@ -389,7 +381,6 @@ impl From<ProfilePatch> for PrfItem {
             file: patch.file,
             url: patch.url,
             selected: patch.selected,
-            latency_test_urls: patch.latency_test_urls,
             extra: patch.extra,
             updated: patch.updated,
             option: patch.option,
@@ -408,6 +399,9 @@ pub async fn patch_profiles_config(profiles: ProfileSelection) -> CmdResult<Vali
     {
         logging!(info, Type::Cmd, "当前正在切换配置，放弃请求");
         return Ok(ValidationOutcome::Busy);
+    }
+    defer! {
+        CURRENT_SWITCHING_PROFILE.store(false, Ordering::Release);
     }
     let _profile_write_guard = PROFILE_WRITE_LOCK.lock().await;
 

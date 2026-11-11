@@ -13,7 +13,7 @@ import {
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
 import type { Ref } from 'react'
-import { useImperativeHandle, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { closeAllConnections } from 'tauri-plugin-mihomo-api'
 
@@ -23,6 +23,8 @@ import { useVerge } from '@/hooks/use-verge'
 import { changeClashCore, restartCore, upgradeClashCore } from '@/services/cmds'
 import { mutate } from '@/services/mutate'
 import { showNotice } from '@/services/notice-service'
+
+import { useSettingDialog } from '../settings-search-context'
 
 const VALID_CORE = [
   {
@@ -54,7 +56,7 @@ export function ClashCoreViewer({ ref }: { ref?: Ref<DialogRef> }) {
   const [restarting, setRestarting] = useState(false)
   const [changingCore, setChangingCore] = useState<string | null>(null)
 
-  useImperativeHandle(ref, () => ({
+  useSettingDialog(ref, 'clash-core-viewer', open, () => ({
     open: () => setOpen(true),
     close: () => setOpen(false),
   }))
@@ -144,6 +146,7 @@ export function ClashCoreViewer({ ref }: { ref?: Ref<DialogRef> }) {
               loading={upgrading}
               disabled={restarting || changingCore !== null}
               sx={{ marginRight: '8px' }}
+              data-setting-target="core-upgrade"
               onClick={onUpgrade}
             >
               {t('shared.actions.upgrade')}
@@ -155,6 +158,7 @@ export function ClashCoreViewer({ ref }: { ref?: Ref<DialogRef> }) {
               loadingPosition="start"
               loading={restarting}
               disabled={upgrading}
+              data-setting-target="core-restart"
               onClick={onRestart}
             >
               {t('shared.actions.restart')}
@@ -175,7 +179,12 @@ export function ClashCoreViewer({ ref }: { ref?: Ref<DialogRef> }) {
       onClose={() => setOpen(false)}
       onCancel={() => setOpen(false)}
     >
-      <List component="nav">
+      <List
+        component="nav"
+        data-settings-dialog="clash-core-viewer"
+        data-setting-target="core-variants"
+        tabIndex={-1}
+      >
         {VALID_CORE.map((each) => (
           <ListItemButton
             key={each.core}

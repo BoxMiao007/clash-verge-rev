@@ -13,6 +13,7 @@ import { ScrollTopButton } from '@/components/layout/scroll-top-button'
 import { ProviderButton } from '@/components/rule/provider-button'
 import RuleItem from '@/components/rule/rule-item'
 import { useCoreCapabilities } from '@/hooks/use-core-capabilities'
+import { usePageSearch } from '@/hooks/use-page-search'
 import { useVisibility } from '@/hooks/use-visibility'
 import { useAppRefreshers, useRulesData } from '@/providers/app-data-context'
 import { getCoreDisplayName } from '@/services/core-capabilities'
@@ -23,16 +24,13 @@ const RulesPage = () => {
   const { refreshRules, refreshRuleProviders } = useAppRefreshers()
   // 内核能力差异的标注从这里取事实,组件不写内核特判(工单 07)
   const capabilities = useCoreCapabilities()
-  const [match, setMatch] = useState(() => (_: string) => true)
+  const { searchState, match, onSearch } = usePageSearch('rules')
   const virtuosoRef = useRef<VirtualListHandle>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const pageVisible = useVisibility()
 
-  // 在组件挂载时和页面获得焦点时刷新规则数据
+  // 页面可见时刷新规则数据：挂载时可见或从隐藏恢复可见各触发一次
   useEffect(() => {
-    refreshRules()
-    refreshRuleProviders()
-
     if (pageVisible) {
       refreshRules()
       refreshRuleProviders()
@@ -83,7 +81,11 @@ const RulesPage = () => {
           alignItems: 'center',
         }}
       >
-        <BaseSearchBox onSearch={(match) => setMatch(() => match)} />
+        <BaseSearchBox
+          defaultValue={searchState.text}
+          {...searchState}
+          onSearch={onSearch}
+        />
       </Box>
 
       {!capabilities.ruleHitCounting && (

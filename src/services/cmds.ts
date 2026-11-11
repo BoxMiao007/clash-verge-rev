@@ -21,7 +21,7 @@ import type {
 
 export type {
   RunningMode,
-  RunStateView as RunState,
+  RunStateView_Serialize as RunState,
   FailedOperation,
   PendingFailure,
   SidecarFailureSnapshot,
@@ -93,18 +93,8 @@ export async function deleteProfile(index: string) {
 }
 
 export async function patchProfile(index: string, profile: ProfilePatch) {
-  const {
-    type,
-    name,
-    desc,
-    file,
-    url,
-    selected,
-    latency_test_urls,
-    extra,
-    updated,
-    option,
-  } = profile
+  const { type, name, desc, file, url, selected, extra, updated, option } =
+    profile
   return commands.patchProfile(index, {
     type,
     name,
@@ -112,7 +102,6 @@ export async function patchProfile(index: string, profile: ProfilePatch) {
     file,
     url,
     selected,
-    latency_test_urls,
     extra,
     updated,
     option,
@@ -165,17 +154,17 @@ export async function patchClashMode(payload: string) {
   return commands.patchClashMode(payload)
 }
 
-export async function syncTrayProxySelection() {
-  return commands.syncTrayProxySelection()
-}
-
 /** Sends one selection pair so the backend can merge against current profile state. */
 export async function recordSelectedNode(groupName: string, node: string) {
   return commands.recordSelectedNode(groupName, node)
 }
 
-export async function forgetSelectedNode(groupName: string) {
-  return commands.forgetSelectedNode(groupName)
+export async function switchProxyNode(
+  groupName: string,
+  proxyName: string,
+  unfix: boolean,
+) {
+  return commands.switchProxyNode(groupName, proxyName, unfix)
 }
 
 export async function getProxyView(): Promise<ProxyViewV1> {

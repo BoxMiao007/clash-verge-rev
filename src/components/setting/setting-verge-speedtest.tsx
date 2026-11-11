@@ -25,14 +25,17 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
   const { t } = useTranslation()
 
   const { verge, patchVerge, mutateVerge } = useVerge()
-  const { default_speedtest_url, default_speedtest_duration, default_speedtest_max_mb } =
-    verge ?? {}
+  const {
+    default_speedtest_url,
+    default_speedtest_duration,
+    default_speedtest_max_mb,
+  } = verge ?? {}
 
   // URL 为自由文本:输入过程只改草稿,失焦才落盘(空串回落内置默认值)。
   const [urlDraft, setUrlDraft] = useState<string | null>(null)
 
   const onChangeData = (patch: any) => {
-    mutateVerge({ ...verge, ...patch }, false)
+    mutateVerge({ ...verge, ...patch })
   }
 
   const onCommitUrl = useLockFn(async () => {

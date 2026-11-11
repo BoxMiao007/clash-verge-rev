@@ -83,7 +83,6 @@ const ProfilePage = () => {
   const { t } = useTranslation()
   const location = useLocation()
   const [url, setUrl] = useState('')
-  const [disabled, setDisabled] = useState(false)
   const [profileDndRevision, setProfileDndRevision] = useState(0)
   const [activatings, setActivatings] = useState<string[]>([])
   const [switchTarget, setSwitchTarget] = useState<string | null>(null)
@@ -257,7 +256,6 @@ const ProfilePage = () => {
         )
       }
     } finally {
-      setDisabled(false)
       setLoading(false)
     }
   }
@@ -523,9 +521,6 @@ const ProfilePage = () => {
       })
       mutateProfiles()
       mutateLogs()
-      if (current) {
-        await onEnhance(false)
-      }
     } catch (err: any) {
       showNotice.error(err)
     } finally {
@@ -655,10 +650,6 @@ const ProfilePage = () => {
 
       await mutateProfiles()
       await mutateLogs()
-
-      if (currentActivating.length > 0) {
-        await onEnhance(false)
-      }
 
       setSelectedProfiles(new Set())
       setBatchMode(false)
@@ -824,7 +815,7 @@ const ProfilePage = () => {
             if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
               return
             }
-            if (!url || disabled || loading) {
+            if (!url || loading) {
               return
             }
             event.preventDefault()
@@ -857,7 +848,7 @@ const ProfilePage = () => {
           }}
         />
         <Button
-          disabled={!url || disabled}
+          disabled={!url}
           loading={loading}
           variant="contained"
           size="small"

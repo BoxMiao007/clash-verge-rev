@@ -539,10 +539,14 @@ fn unpack_meow(package: &[u8], out: &mut File) -> Result<()> {
         let mut entry = archive
             .by_index(index)
             .context("failed to read the meow core archive")?;
-        let is_binary = Path::new(entry.name())
-            .file_name()
-            .map(|name| name == OsStr::new("meow.exe"))
-            .unwrap_or(false);
+        // zip 9 起 `ZipFile::name` 返回 Result<Cow<str>, ZipError>,需先取名字再复制,借用限在块内。
+        let is_binary = {
+            let entry_name = entry.name().context("failed to read the meow core entry name")?;
+            Path::new(entry_name.as_ref())
+                .file_name()
+                .map(|name| name == OsStr::new("meow.exe"))
+                .unwrap_or(false)
+        };
         if is_binary {
             return std::io::copy(&mut entry, out)
                 .map(|_| ())

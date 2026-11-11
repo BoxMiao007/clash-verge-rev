@@ -6,6 +6,7 @@ import { useVerge } from '@/hooks/use-verge'
 import { useAppRefreshers, useProxiesData } from '@/providers/app-data-context'
 import delayManager, { type DelaySnapshot } from '@/services/delay'
 import {
+  findCurrentGroupMember,
   isInteractableMember,
   resolveMember,
   selectGlobalChainNodes,
@@ -116,7 +117,6 @@ const virtualGroup = (members: ProxyGroupView['members']): ProxyGroupView => ({
   mptcp: false,
   smux: false,
   history: [],
-  extra: {},
   members,
 })
 
@@ -207,17 +207,28 @@ export const useRenderList = (
     verge?.default_latency_timeout,
   ])
 
+  const renderGroups = useMemo(() => {
+    if (!proxyView) return []
+    // A profile whose only group is GLOBAL (mihomo then skips its built-in one)
+    // or that has no proxy-groups has nothing else to show in rule mode.
+    if (mode === 'rule') {
+      return proxyView.groups.length || !proxyView.global
+        ? proxyView.groups
+        : [proxyView.global]
+    }
+    const { global } = proxyView
+    if (!global) return []
+    const current = findCurrentGroupMember(proxyView, global)?.member
+    return current?.kind === 'group' ? [global, current.group] : [global]
+  }, [mode, proxyView])
+
   // Every group this list draws, so a test settling in any of them re-sorts that group.
   const renderedGroupNames = useMemo(() => {
     if (!proxyView) return []
     if (isChainMode)
       return selectedGroup ? [selectedGroup] : [CHAIN_DELAY_GROUP]
-    return mode === 'rule' || mode === 'script'
-      ? proxyView.groups.map(({ name }) => name)
-      : proxyView.global
-        ? [proxyView.global.name]
-        : []
-  }, [isChainMode, mode, proxyView, selectedGroup])
+    return renderGroups.map(({ name }) => name)
+  }, [isChainMode, proxyView, renderGroups, selectedGroup])
   const groupDelays = useGroupsDelays(renderedGroupNames)
 
   const groupCacheRef = useRef<Map<string, GroupCache>>(new Map())
@@ -258,16 +269,10 @@ export const useRenderList = (
       }))
     }
 
-    const useRule = mode === 'rule' || mode === 'script'
-    const renderGroups = useRule
-      ? proxyView.groups
-      : proxyView.global === null
-        ? []
-        : [proxyView.global]
     const cache = groupCacheRef.current
-    let anyChanged = false
 
     const retList = renderGroups.flatMap((group) => {
+      const isFlat = group === proxyView.global
       const headState = headStates[group.name] || DEFAULT_STATE
       const cached = cache.get(group.name)
       if (
@@ -282,19 +287,20 @@ export const useRenderList = (
         return cached.items
       }
 
-      anyChanged = true
       const ret: IRenderItem[] = [
-        {
-          type: 0,
-          key: group.name,
-          group,
-          headState,
-          icon: group.icon!,
-          testUrl: group.testUrl!,
-        },
+        isFlat
+          ? { type: 1, key: `head-${group.name}`, group, headState }
+          : {
+              type: 0,
+              key: group.name,
+              group,
+              headState,
+              icon: group.icon!,
+              testUrl: group.testUrl!,
+            },
       ]
 
-      if (headState.open || !useRule) {
+      if (headState.open || isFlat) {
         const occurrences = filterSort(
           resolveOccurrences(proxyView, group),
           group.name,
@@ -307,9 +313,6 @@ export const useRenderList = (
             useRegularExpression: headState.filterUseRegularExpression,
           },
         )
-        if (!useRule) {
-          ret.push({ type: 1, key: `head-${group.name}`, group, headState })
-        }
         if (occurrences.length === 0) {
           ret.push({ type: 3, key: `empty-${group.name}`, group, headState })
         } else if (col > 1) {
@@ -348,10 +351,12 @@ export const useRenderList = (
       return ret
     })
 
-    const filtered = !useRule
-      ? retList.slice(1)
-      : retList.filter((item) => !item.group.hidden)
-    if (!anyChanged && prevListRef.current.length === filtered.length) {
+    const filtered =
+      mode === 'rule' ? retList.filter((item) => !item.group.hidden) : retList
+    if (
+      prevListRef.current.length === filtered.length &&
+      filtered.every((item, index) => item === prevListRef.current[index])
+    ) {
       return prevListRef.current
     }
     prevListRef.current = filtered
@@ -365,6 +370,7 @@ export const useRenderList = (
     latencyTimeout,
     mode,
     proxyView,
+    renderGroups,
     selectedGroup,
   ])
 
