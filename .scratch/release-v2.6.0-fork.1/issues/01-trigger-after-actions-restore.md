@@ -31,8 +31,16 @@ gh workflow run fork-release.yml --repo BoxMiao007/clash-verge-rev -f tag=v2.6.0
 - [ ] 安装包内含 verge-meow.exe + wintun.dll
 - [ ] Windows 实机覆盖安装冒烟:双内核切换、测速(含设置搜索可检索测速项)、meow GEO 更新
 
-**Status:** blocked-on-owner(GitHub 账户 Actions 封停;需维护者查 github.com/settings/billing
-是否欠款/需绑卡,或联系 GitHub Support 解封)
+**Status:** done(2026-11-12)——Actions 仍封停(422),改为**本地构建 + 手动发布**:
+`pnpm release-version 2.6.0+fork.1` 盖章后 `tauri build`(仅 nsis),产物
+`Clash Verge_2.6.0+fork.1_x64-setup.exe`(61.72 MiB, SHA256 9F53DB1B…13C2AC1),
+`gh release create v2.6.0-fork.1` 已发布并上传附件;构建后版本号已还原为 2.6.0。
+GitHub 附件名把空格转为点号:`Clash.Verge_2.6.0+fork.1_x64-setup.exe`。
+维护者已在本机覆盖安装冒烟通过。
+
+**后续(可选):** 待 GitHub 账户 Actions 解封后,如需走 CI 重发,执行
+`gh workflow run fork-release.yml --repo BoxMiao007/clash-verge-rev -f tag=v2.6.0-fork.1`
+(会覆盖上传同一 Release 的产物)。
 
 **注意:**
 
