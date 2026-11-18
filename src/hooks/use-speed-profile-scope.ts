@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 
 import { useProfiles } from '@/hooks/use-profiles'
-import { useProxiesData } from '@/providers/app-data-context'
+import { useCoreDataStatus, useProxiesData } from '@/providers/app-data-context'
 import speedManager, { speedIdentityOfNode } from '@/services/speed'
 
 /** 把当前订阅作用域同步给 SpeedManager。
@@ -13,6 +13,7 @@ import speedManager, { speedIdentityOfNode } from '@/services/speed'
 export function useSpeedProfileScope() {
   const { current } = useProfiles()
   const { proxyView } = useProxiesData()
+  const { isCoreDataPending } = useCoreDataStatus()
   const profileUid = current?.uid ?? null
 
   useEffect(() => {
@@ -20,7 +21,8 @@ export function useSpeedProfileScope() {
   }, [profileUid])
 
   useEffect(() => {
-    if (!profileUid || !proxyView) return
+    // 内核数据仍在加载时节点集合可能不完整,此时清理会误删结果。
+    if (!profileUid || !proxyView || isCoreDataPending) return
     const identities = new Set(
       Object.values(proxyView.records ?? {}).map((node) =>
         speedIdentityOfNode(node),
@@ -28,5 +30,5 @@ export function useSpeedProfileScope() {
     )
     if (identities.size === 0) return
     speedManager.pruneProfile(profileUid, identities)
-  }, [profileUid, proxyView])
+  }, [profileUid, proxyView, isCoreDataPending])
 }
