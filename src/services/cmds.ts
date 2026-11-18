@@ -318,6 +318,28 @@ export async function speedtestNode(
   return commands.speedtestNode(name, url, durationSecs, maxBytes)
 }
 
+/** 读取并行测速槽端口表(下标即槽号,None 表示未注入)。 */
+export async function speedtestSlotPorts(): Promise<(number | null)[]> {
+  return commands.speedtestSlotPorts()
+}
+
+/** 经指定测速槽测单节点,不触碰 GLOBAL。 */
+export async function speedtestNodeViaSlot(
+  slot: number,
+  name: string,
+  url: string,
+  durationSecs: number,
+  maxBytes: number | null,
+): Promise<SpeedTestResult> {
+  return commands.speedtestNodeViaSlot(
+    slot,
+    name,
+    url,
+    durationSecs,
+    maxBytes,
+  )
+}
+
 export async function restartApp() {
   return commands.restartApp()
 }

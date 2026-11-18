@@ -115,7 +115,7 @@ function sortProxies(
     return proxies
       .map((proxy) => ({
         proxy,
-        speed: speedManager.getSpeed(proxy.member.ref.name, groupName),
+        speed: speedManager.getSpeedForMember(proxy.member, groupName),
       }))
       .sort((a, b) => compareBySpeed(a.speed, b.speed))
       .map(({ proxy }) => proxy)

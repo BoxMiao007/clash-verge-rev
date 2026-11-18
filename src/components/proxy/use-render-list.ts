@@ -16,6 +16,7 @@ import {
   type ResolvedProxyMember,
 } from '@/types/proxy-view'
 import { debugLog } from '@/utils/debug'
+import { isSpeedtestSlotGroupName } from '@/utils/speed'
 
 import { filterSort, isDelayFilter } from './use-filter-sort'
 import {
@@ -75,10 +76,16 @@ type GroupCache = {
 type RuntimeConfigWithProxySequence = IConfigData & { proxies?: unknown }
 
 const resolveOccurrences = (view: ProxyViewV1, group: ProxyGroupView) =>
-  group.members.map((member, memberIndex) => ({
-    memberIndex,
-    member: resolveMember(view, member),
-  }))
+  group.members
+    .map((member, memberIndex) => ({
+      memberIndex,
+      member: resolveMember(view, member),
+    }))
+    // 并行测速槽是内部 selector 组,不能作为普通分组/成员展示。
+    .filter(
+      ({ member }) =>
+        !(member.kind === 'group' && isSpeedtestSlotGroupName(member.ref.name)),
+    )
 
 const memberKey = (
   group: ProxyGroupView,
@@ -213,9 +220,10 @@ export const useRenderList = (
     // A profile whose only group is GLOBAL (mihomo then skips its built-in one)
     // or that has no proxy-groups has nothing else to show in rule mode.
     if (mode === 'rule') {
-      return proxyView.groups.length || !proxyView.global
-        ? proxyView.groups
-        : [proxyView.global]
+      const groups = proxyView.groups.filter(
+        (group) => !isSpeedtestSlotGroupName(group.name),
+      )
+      return groups.length || !proxyView.global ? groups : [proxyView.global]
     }
     const { global } = proxyView
     if (!global) return []

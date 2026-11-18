@@ -28,6 +28,15 @@ pub const SPEEDTEST_LISTENER_NAME: &str = "verge-speedtest";
 pub const SPEEDTEST_BASE_PORT: u16 = 9666;
 /// 端口探测范围(mixed-port 被占时 mihomo 只记 error 不退出,必须主动避让)。
 const PORT_PROBE_ATTEMPTS: u16 = 16;
+
+/// 并行测速槽数量:固定注入,运行时按设置并发数(1–8)取用(ADR-0005)。
+pub const SPEEDTEST_SLOT_COUNT: u16 = 8;
+/// 槽 listener 与槽 selector 组共用的名字前缀;前端据此过滤内部组。
+pub const SPEEDTEST_SLOT_PREFIX: &str = "verge-speedtest-slot-";
+/// 槽端口基准:与 GLOBAL 专用端口(9666 起)错开,避免每次生成自撞。
+const SPEEDTEST_SLOT_BASE_PORT: u16 = 9700;
+/// 槽端口探测范围:容纳 8 个槽并留足避让余量。
+const SLOT_PORT_PROBE_ATTEMPTS: u16 = 96;
 /// 测速时长上下限(秒)。前端 `src/utils/speed.ts` 持有同一份界限(输入夹取与
 /// 解析归一),跨语言无法共享常量,两处需同步修改;此处保留一份用于服务端校验。
 const MIN_DURATION_SECS: u64 = 1;
@@ -98,6 +107,126 @@ pub fn speedtest_listener_port(config: &Mapping) -> Option<u16> {
                 _ => None,
             })
         })
+}
+
+/// 槽的 listener 名与 selector 组名一致(同一前缀)。
+pub fn speedtest_slot_name(slot: u16) -> String {
+    format!("{SPEEDTEST_SLOT_PREFIX}{slot}")
+}
+
+/// 该 listener 是否为本模块注入的并行测速槽。
+fn is_slot_listener(listener: &Mapping) -> bool {
+    listener
+        .get("name")
+        .and_then(Value::as_str)
+        .is_some_and(|name| name.starts_with(SPEEDTEST_SLOT_PREFIX))
+}
+
+/// 该 proxy-group 是否为本模块注入的并行测速槽组。
+fn is_slot_group(group: &Mapping) -> bool {
+    group
+        .get("name")
+        .and_then(Value::as_str)
+        .is_some_and(|name| name.starts_with(SPEEDTEST_SLOT_PREFIX))
+}
+
+/// 构造槽 listener:mihomo 下 `proxy:` 绑定同名槽 selector 组;meow 下该字段会被
+/// `strip_listener_proxy_fields` 剔除,改由同端口 IN-PORT 规则引流(ADR-0005)。
+fn speedtest_slot_listener_entry(slot: u16, port: u16) -> Mapping {
+    let name = speedtest_slot_name(slot);
+    let mut listener = Mapping::new();
+    listener.insert("name".into(), name.clone().into());
+    listener.insert("type".into(), "mixed".into());
+    listener.insert("port".into(), port.into());
+    listener.insert("listen".into(), "127.0.0.1".into());
+    listener.insert("proxy".into(), name.into());
+    listener
+}
+
+/// 从运行时配置读出某个槽的端口。
+pub fn speedtest_slot_port(config: &Mapping, slot: u16) -> Option<u16> {
+    let name = speedtest_slot_name(slot);
+    config
+        .get("listeners")
+        .and_then(Value::as_sequence)?
+        .iter()
+        .find_map(|item| {
+            let listener = item.as_mapping()?;
+            if listener.get("name").and_then(Value::as_str) != Some(name.as_str()) {
+                return None;
+            }
+            listener.get("port").and_then(|value| match value {
+                Value::Number(num) => num.as_u64().map(|p| p as u16),
+                Value::String(s) => s.parse().ok(),
+                _ => None,
+            })
+        })
+}
+
+/// 读出全部槽的端口(下标即槽号);未注入的槽为 None。
+pub fn speedtest_slot_ports(config: &Mapping) -> Vec<Option<u16>> {
+    (0..SPEEDTEST_SLOT_COUNT)
+        .map(|slot| speedtest_slot_port(config, slot))
+        .collect()
+}
+
+/// 收集配置里已被占用的端口,但把"槽 listener"视为本模块自身、不重复计入。
+/// 与 [`collect_occupied_ports`] 的区别:后者会把 GLOBAL 专用 listener 也算作自身而
+/// 排除;槽注入需要把 GLOBAL listener 端口当占用,避免两类通道抢同一端口。
+fn collect_occupied_ports_excluding_slot_listeners(config: &Mapping) -> Vec<u16> {
+    let mut ports = Vec::new();
+    let port_keys = ["mixed-port", "port", "socks-port", "redir-port", "tproxy-port"];
+    for key in port_keys {
+        if let Some(value) = config.get(key)
+            && let Some(port) = value
+                .as_str()
+                .and_then(|s| s.parse().ok())
+                .or_else(|| value.as_u64().map(|p| p as u16))
+        {
+            ports.push(port);
+        }
+    }
+
+    if let Some(addr) = config.get("external-controller").and_then(Value::as_str)
+        && let Some((_, port)) = addr.rsplit_once(':')
+        && let Ok(port) = port.parse()
+    {
+        ports.push(port);
+    }
+
+    if let Some(listeners) = config.get("listeners").and_then(Value::as_sequence) {
+        for item in listeners {
+            if let Some(listener) = item.as_mapping()
+                && !is_slot_listener(listener)
+                && let Some(port) = listener.get("port").and_then(|value| value.as_u64().map(|p| p as u16))
+            {
+                ports.push(port);
+            }
+        }
+    }
+
+    ports
+}
+
+/// 探测 `count` 个互不相同、且不与 `exclude` 冲突的回环端口。
+fn probe_free_slot_ports(exclude: &[u16], count: usize) -> Option<Vec<u16>> {
+    let mut taken: Vec<u16> = exclude.to_vec();
+    let mut ports = Vec::with_capacity(count);
+    for offset in 0..SLOT_PORT_PROBE_ATTEMPTS {
+        if ports.len() == count {
+            break;
+        }
+        let port = SPEEDTEST_SLOT_BASE_PORT + offset;
+        if taken.contains(&port) {
+            continue;
+        }
+        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+        if std::net::TcpListener::bind(addr).is_ok() {
+            ports.push(port);
+            taken.push(port);
+        }
+    }
+    (ports.len() == count).then_some(ports)
 }
 
 /// 收集配置里已被占用的端口,测速 listener 不得与之冲突。
@@ -189,6 +318,142 @@ fn remove_speedtest_listener(config: &mut Mapping) {
     if let Some(listeners) = config.get_mut("listeners").and_then(Value::as_sequence_mut) {
         listeners.retain(|item| item.as_mapping().map(is_speedtest_listener) != Some(true));
     }
+}
+
+/// 注入并行测速槽:`SPEEDTEST_SLOT_COUNT` 个 mixed listener + 同名隐藏 selector 组。
+///
+/// 与 GLOBAL 专用通道并存(后者保留为槽不可用时的兜底),二者端口段错开。
+/// 幂等:重复调用只替换本模块的槽条目,保留用户 listener/组。槽组 `include-all`
+/// 覆盖全部 provider/内联节点(provider 节点无法直接寻址,必须经组);不含子组,
+/// 因此并行只覆盖叶子节点,子组成员走 GLOBAL 兜底。
+pub fn inject_speedtest_slots(config: &mut Mapping) {
+    // 无可测节点时注入空 selector 组会产出无成员的组,可能被内核判为非法配置:
+    // 仅在存在代理来源(内联 proxies 或 proxy-providers)时注入。
+    let has_proxy_source = config
+        .get("proxies")
+        .and_then(Value::as_sequence)
+        .is_some_and(|proxies| !proxies.is_empty())
+        || config
+            .get("proxy-providers")
+            .and_then(Value::as_mapping)
+            .is_some_and(|providers| !providers.is_empty());
+    if !has_proxy_source {
+        remove_speedtest_slots(config);
+        return;
+    }
+
+    let occupied = collect_occupied_ports_excluding_slot_listeners(config);
+    let Some(ports) = probe_free_slot_ports(&occupied, SPEEDTEST_SLOT_COUNT as usize) else {
+        logging!(
+            warn,
+            Type::Core,
+            "下载测速:并行槽端口不足,本次不注入并行测速能力"
+        );
+        remove_speedtest_slots(config);
+        return;
+    };
+
+    let mut listeners: Vec<Value> = Vec::new();
+    if let Some(existing) = config.get("listeners").and_then(Value::as_sequence) {
+        for item in existing {
+            let keep = item.as_mapping().map(is_slot_listener) != Some(true);
+            if keep {
+                listeners.push(item.clone());
+            }
+        }
+    }
+    for slot in 0..SPEEDTEST_SLOT_COUNT {
+        listeners.push(Value::Mapping(speedtest_slot_listener_entry(
+            slot,
+            ports[slot as usize],
+        )));
+    }
+    config.insert("listeners".into(), Value::Sequence(listeners));
+
+    inject_speedtest_slot_groups(config);
+    logging!(
+        debug,
+        Type::Core,
+        "下载测速:注入 {SPEEDTEST_SLOT_COUNT} 个并行测速槽"
+    );
+}
+
+/// 移除本模块注入的槽 listener 与槽组(用户条目不动)。
+fn remove_speedtest_slots(config: &mut Mapping) {
+    if let Some(listeners) = config.get_mut("listeners").and_then(Value::as_sequence_mut) {
+        listeners.retain(|item| item.as_mapping().map(is_slot_listener) != Some(true));
+    }
+    remove_speedtest_slot_groups(config);
+}
+
+/// 注入槽 selector 组:`type: select` + `include-all` + `hidden`。
+fn inject_speedtest_slot_groups(config: &mut Mapping) {
+    let mut groups: Vec<Value> = Vec::new();
+    if let Some(existing) = config.get("proxy-groups").and_then(Value::as_sequence) {
+        for item in existing {
+            let keep = item.as_mapping().map(is_slot_group) != Some(true);
+            if keep {
+                groups.push(item.clone());
+            }
+        }
+    }
+    for slot in 0..SPEEDTEST_SLOT_COUNT {
+        let mut group = Mapping::new();
+        group.insert("name".into(), speedtest_slot_name(slot).into());
+        group.insert("type".into(), "select".into());
+        group.insert("include-all".into(), true.into());
+        group.insert("hidden".into(), true.into());
+        groups.push(Value::Mapping(group));
+    }
+    config.insert("proxy-groups".into(), Value::Sequence(groups));
+}
+
+fn remove_speedtest_slot_groups(config: &mut Mapping) {
+    if let Some(groups) = config.get_mut("proxy-groups").and_then(Value::as_sequence_mut) {
+        groups.retain(|item| item.as_mapping().map(is_slot_group) != Some(true));
+    }
+}
+
+/// 本模块注入的槽引流规则(`IN-PORT,<槽端口>,<槽组名>`)。
+fn is_slot_inport_rule(rule: &str) -> bool {
+    rule.starts_with("IN-PORT,")
+        && rule
+            .split(',')
+            .nth(2)
+            .is_some_and(|target| target.starts_with(SPEEDTEST_SLOT_PREFIX))
+}
+
+/// meow 下的并行测速槽引流:为每个槽在规则栈顶注入 `IN-PORT,<槽端口>,<槽组>`。
+///
+/// meow 忽略 listener `proxy:` 字段(ADR-0004),槽流量必须靠 IN-PORT 规则推进槽组;
+/// meow 对规则目标名不校验,缺名会静默回落默认路由,因此槽组必须与规则同批注入
+/// (本函数由 `patch_for_meow` 在 listener/组注入之后调用)。无槽 listener 时不动配置。
+pub fn inject_speedtest_slot_inport_rules(config: &mut Mapping) {
+    let desired: Vec<String> = (0..SPEEDTEST_SLOT_COUNT)
+        .filter_map(|slot| {
+            let port = speedtest_slot_port(config, slot)?;
+            Some(format!("IN-PORT,{port},{}", speedtest_slot_name(slot)))
+        })
+        .collect();
+    if desired.is_empty() {
+        return;
+    }
+
+    let Some(rules) = config.get_mut("rules").and_then(Value::as_sequence_mut) else {
+        logging!(
+            warn,
+            Type::Core,
+            "下载测速:配置无规则列表,meow 下无法注入并行槽引流规则,本次移除并行能力"
+        );
+        remove_speedtest_slots(config);
+        return;
+    };
+
+    rules.retain(|item| item.as_str().map(is_slot_inport_rule) != Some(true));
+    for rule in desired.into_iter().rev() {
+        rules.insert(0, Value::from(rule));
+    }
+    logging!(debug, Type::Core, "下载测速:注入 meow 并行槽引流规则");
 }
 
 /// meow 下的测速引流:在规则栈顶注入 `IN-PORT,<专用端口>,GLOBAL`(ADR-0004)。
@@ -559,6 +824,68 @@ pub async fn speedtest_node(
     })
 }
 
+/// 并行测速:把一个节点绑到指定槽组,经该槽专用端口限时下载,全程不触碰 GLOBAL。
+///
+/// 槽组由配置生成时注入(`include-all` 覆盖 provider/内联节点),`select_node_for_group`
+/// 走通用 `PUT /proxies/<组名>` 接缝,mihomo 与 meow 共用。单槽仅服务一个测试,
+/// 并发由前端槽池保证不同测试使用不同槽。
+pub async fn speedtest_node_via_slot(
+    slot: u16,
+    name: String,
+    url: String,
+    duration_secs: u64,
+    max_bytes: Option<f64>,
+) -> Result<SpeedTestResult> {
+    if slot >= SPEEDTEST_SLOT_COUNT {
+        bail!("测速槽编号越界: {slot}");
+    }
+    validate_url(&url)?;
+    let window = Duration::from_secs(clamp_duration(duration_secs));
+    let max_bytes = normalize_max_bytes(max_bytes);
+
+    let runtime = Config::runtime().await;
+    let data = runtime.data_arc();
+    let config = data
+        .config
+        .as_ref()
+        .ok_or_else(|| anyhow!("运行时配置尚未生成,无法执行下载测速"))?;
+    let port = speedtest_slot_port(config, slot).ok_or_else(|| anyhow!("测速槽 {slot} 未就绪,请重启内核后重试"))?;
+    let group = speedtest_slot_name(slot);
+
+    // 先绑定槽组再建客户端:绑定失败即报错,不做无目标的下载。
+    Handle::mihomo()
+        .select_node_for_group(&group, &name)
+        .await
+        .context("测速槽绑定节点失败")?;
+
+    let client = build_download_client(port)?;
+    let (bytes, elapsed) = timed_download(&client, &url, window, max_bytes).await?;
+
+    if bytes == 0 {
+        bail!(
+            "窗口 {}ms 内未收到任何数据,节点可能不可用(用时 {}ms)",
+            window.as_millis(),
+            elapsed.as_millis()
+        );
+    }
+
+    Ok(SpeedTestResult {
+        bytes,
+        elapsed_ms: elapsed.as_millis() as u64,
+        speed_bps: calc_speed_bps(bytes, elapsed),
+    })
+}
+
+/// 运行时读取各槽端口(下标即槽号,None 表示未注入)。配置未生成时返回全 None。
+pub async fn speedtest_slot_ports_runtime() -> Result<Vec<Option<u16>>> {
+    let runtime = Config::runtime().await;
+    let data = runtime.data_arc();
+    let Some(config) = data.config.as_ref() else {
+        return Ok(vec![None; SPEEDTEST_SLOT_COUNT as usize]);
+    };
+    Ok(speedtest_slot_ports(config))
+}
+
 /// 内核启动后的恢复检查:按恢复日志把崩溃残留的 GLOBAL 选择还原。
 ///
 /// 处置语义见 [`decide_startup_restore`]:无日志零开销;残留已被覆盖仅清理;
@@ -690,6 +1017,12 @@ mod tests {
         );
     }
 
+    fn test_proxies() -> Value {
+        let mut proxy = Mapping::new();
+        proxy.insert("name".into(), "n1".into());
+        Value::Sequence(vec![Value::Mapping(proxy)])
+    }
+
     fn listener_entry(name: &str, port: u16) -> Value {
         let mut listener = Mapping::new();
         listener.insert("name".into(), name.into());
@@ -764,6 +1097,95 @@ mod tests {
             Value::Sequence(vec![listener_entry("other", 12345)]),
         );
         assert_eq!(speedtest_listener_port(&config), None);
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn slot_injection_creates_listeners_and_hidden_groups() {
+        let mut config = Mapping::new();
+        config.insert("proxies".into(), test_proxies());
+        inject_speedtest_listener(&mut config);
+        inject_speedtest_slots(&mut config);
+
+        let listeners = config.get("listeners").and_then(Value::as_sequence).unwrap();
+        assert_eq!(listeners.len(), 1 + SPEEDTEST_SLOT_COUNT as usize);
+
+        let ports = speedtest_slot_ports(&config);
+        assert_eq!(ports.len(), SPEEDTEST_SLOT_COUNT as usize);
+        let mut seen = std::collections::HashSet::new();
+        for slot in 0..SPEEDTEST_SLOT_COUNT {
+            let port = ports[slot as usize].expect("槽端口应存在");
+            assert!(seen.insert(port), "槽端口不得重复");
+            let name = speedtest_slot_name(slot);
+            let listener = listeners
+                .iter()
+                .filter_map(Value::as_mapping)
+                .find(|m| m.get("name").and_then(Value::as_str) == Some(name.as_str()))
+                .unwrap();
+            assert_eq!(listener.get("proxy").and_then(Value::as_str), Some(name.as_str()));
+            assert_eq!(listener.get("listen").and_then(Value::as_str), Some("127.0.0.1"));
+        }
+        let global_port = speedtest_listener_port(&config).unwrap();
+        assert!(!seen.contains(&global_port), "槽端口不得与 GLOBAL 专用端口冲突");
+
+        let groups = config.get("proxy-groups").and_then(Value::as_sequence).unwrap();
+        assert_eq!(groups.len(), SPEEDTEST_SLOT_COUNT as usize);
+        for group in groups {
+            let group = group.as_mapping().unwrap();
+            assert_eq!(group.get("type").and_then(Value::as_str), Some("select"));
+            assert_eq!(group.get("include-all"), Some(&Value::Bool(true)));
+            assert_eq!(group.get("hidden"), Some(&Value::Bool(true)));
+        }
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn slot_injection_is_idempotent_and_keeps_user_groups() {
+        let mut config = Mapping::new();
+        config.insert("proxies".into(), test_proxies());
+        let mut user = Mapping::new();
+        user.insert("name".into(), "user-group".into());
+        user.insert("type".into(), "select".into());
+        config.insert("proxy-groups".into(), Value::Sequence(vec![Value::Mapping(user)]));
+
+        inject_speedtest_slots(&mut config);
+        inject_speedtest_slots(&mut config);
+
+        let groups = config.get("proxy-groups").and_then(Value::as_sequence).unwrap();
+        assert_eq!(groups.len(), 1 + SPEEDTEST_SLOT_COUNT as usize);
+        assert_eq!(
+            groups[0].as_mapping().unwrap().get("name").and_then(Value::as_str),
+            Some("user-group"),
+            "用户组保留"
+        );
+        let listeners = config.get("listeners").and_then(Value::as_sequence).unwrap();
+        assert_eq!(listeners.len(), SPEEDTEST_SLOT_COUNT as usize, "重复注入不产生重复 listener");
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn slot_inport_rules_injected_and_deduplicated_for_meow() {
+        let mut config = Mapping::new();
+        config.insert("proxies".into(), test_proxies());
+        inject_speedtest_listener(&mut config);
+        inject_speedtest_slots(&mut config);
+        config.insert("rules".into(), Value::Sequence(vec![Value::from("MATCH,DIRECT")]));
+
+        inject_speedtest_slot_inport_rules(&mut config);
+        inject_speedtest_slot_inport_rules(&mut config);
+
+        let rules = config.get("rules").and_then(Value::as_sequence).unwrap();
+        let slot_rules = rules
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|rule| rule.starts_with("IN-PORT,"))
+            .count();
+        assert_eq!(slot_rules, SPEEDTEST_SLOT_COUNT as usize, "每个槽一条且去重");
+        assert_eq!(
+            rules.last().and_then(Value::as_str),
+            Some("MATCH,DIRECT"),
+            "用户规则原序保留在末尾"
+        );
     }
 
     fn temp_test_dir(tag: &str) -> PathBuf {

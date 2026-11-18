@@ -124,6 +124,11 @@ pub struct IVerge {
     /// 解析语义见前端 src/utils/speed.ts 与 feat/speedtest.rs(两处同步约定)。
     pub default_speedtest_max_mb: Option<u16>,
 
+    /// 并行测速开关与并发数(ADR-0005);未配置时前端默认开启、并发 4(1–8)。
+    pub default_speedtest_parallel: Option<bool>,
+
+    pub default_speedtest_concurrency: Option<u16>,
+
     pub enable_auto_delay_detection: Option<bool>,
 
     /// 自动检测当前节点延迟的间隔（分钟）
@@ -479,6 +484,8 @@ impl IVerge {
         patch_opt_field!(self, patch, default_speedtest_url);
         patch_opt_field!(self, patch, default_speedtest_duration);
         patch_opt_field!(self, patch, default_speedtest_max_mb);
+        patch_opt_field!(self, patch, default_speedtest_parallel);
+        patch_opt_field!(self, patch, default_speedtest_concurrency);
         patch_opt_field!(self, patch, enable_auto_delay_detection);
         patch_opt_field!(self, patch, auto_delay_detection_interval_minutes);
         patch_opt_field!(self, patch, enable_builtin_enhanced);

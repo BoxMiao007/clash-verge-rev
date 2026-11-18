@@ -6,6 +6,13 @@ vi.mock('@/services/cmds', () => ({
     elapsedMs: 5000,
     speedBps: 1_000_000,
   })),
+  speedtestNodeViaSlot: vi.fn(async () => ({
+    bytes: 5_000_000,
+    elapsedMs: 5000,
+    speedBps: 1_000_000,
+  })),
+  // 测试环境无 Tauri:槽表为空,批量测速回落 GLOBAL 通道(串行)以保持既有语义。
+  speedtestSlotPorts: vi.fn(async () => []),
 }))
 
 import type { InteractableProxyMember } from '@/types/proxy-view'
@@ -179,19 +186,18 @@ describe('流量上限透传', () => {
   })
 })
 
-describe('TTL 过期', () => {
-  test('超过 30 分钟后缓存视为未测试', async () => {
+describe('结果持久保留(不自动过期)', () => {
+  test('超过 30 分钟仍保留结果,不再自动过期', async () => {
     vi.useFakeTimers()
     try {
-      // 假定时器下手动推进 500ms 补齐窗口,让测量落定。
-      const pending = speedManager.checkSpeed(node('ttl'), 'g')
+      const pending = speedManager.checkSpeed(node('keep'), 'g')
       await vi.advanceTimersByTimeAsync(600)
       await pending
-      expect(speedManager.getSpeed('ttl', 'g')).toBe(1_000_000)
+      expect(speedManager.getSpeed('keep', 'g')).toBe(1_000_000)
 
       vi.setSystemTime(Date.now() + 31 * 60 * 1000)
-      expect(speedManager.getSpeed('ttl', 'g')).toBe(-1)
-      expect(speedManager.getSpeedUpdate('ttl', 'g')).toBeUndefined()
+      expect(speedManager.getSpeed('keep', 'g')).toBe(1_000_000)
+      expect(speedManager.getSpeedUpdate('keep', 'g')).toBeDefined()
     } finally {
       vi.useRealTimers()
     }

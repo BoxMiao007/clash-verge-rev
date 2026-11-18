@@ -96,6 +96,79 @@ export const DEFAULT_SPEEDTEST_URL =
   'https://dl.google.com/chrome/mac/universal/stable/GGRO/googlechrome.dmg'
 export const DEFAULT_SPEEDTEST_WINDOW_SECS = 5
 
+/** 并行测速:默认开启(ADR-0005);并发数默认 4,允许 1–8。 */
+export const DEFAULT_SPEEDTEST_PARALLEL = true
+export const DEFAULT_SPEEDTEST_CONCURRENCY = 4
+export const MIN_SPEEDTEST_CONCURRENCY = 1
+export const MAX_SPEEDTEST_CONCURRENCY = 8
+
+/** 夹取并发数到允许区间并将非法输入回落默认值。 */
+export const clampSpeedtestConcurrency = (value: number): number =>
+  Math.min(
+    MAX_SPEEDTEST_CONCURRENCY,
+    Math.max(MIN_SPEEDTEST_CONCURRENCY, Math.trunc(value)),
+  )
+
+export const resolveSpeedtestParallel = (
+  configured?: boolean | null,
+): boolean => (typeof configured === 'boolean' ? configured : DEFAULT_SPEEDTEST_PARALLEL)
+
+export const resolveSpeedtestConcurrency = (
+  configured?: number | null,
+): number => {
+  if (configured == null || !Number.isFinite(configured)) {
+    return DEFAULT_SPEEDTEST_CONCURRENCY
+  }
+  return clampSpeedtestConcurrency(configured)
+}
+
+/** 并行测速槽组的名字前缀(与后端 feat/speedtest.rs 保持一致);前端据此隐藏内部组。 */
+export const SPEEDTEST_SLOT_GROUP_PREFIX = 'verge-speedtest-slot-'
+
+export const isSpeedtestSlotGroupName = (name: string): boolean =>
+  name.startsWith(SPEEDTEST_SLOT_GROUP_PREFIX)
+
+/** 内置测速源预设:选中即把对应 URL 写入配置;仍允许“自定义”手填。 */
+export interface SpeedtestUrlPreset {
+  id: string
+  /** i18n 键,展示时按当前语言取文案。 */
+  labelKey: string
+  url: string
+}
+
+export const SPEEDTEST_URL_PRESETS: readonly SpeedtestUrlPreset[] = [
+  {
+    id: 'cloudflare',
+    labelKey: 'settings.components.verge.speedtest.urlPresets.cloudflare',
+    url: 'https://speed.cloudflare.com/__down?bytes=200000000',
+  },
+  {
+    id: 'google',
+    labelKey: 'settings.components.verge.speedtest.urlPresets.google',
+    url: DEFAULT_SPEEDTEST_URL,
+  },
+  {
+    id: 'ovh',
+    labelKey: 'settings.components.verge.speedtest.urlPresets.ovh',
+    url: 'https://proof.ovh.net/files/100Mb.dat',
+  },
+  {
+    id: 'hetzner',
+    labelKey: 'settings.components.verge.speedtest.urlPresets.hetzner',
+    url: 'https://speed.hetzner.de/100MB.bin',
+  },
+  {
+    id: 'cachefly',
+    labelKey: 'settings.components.verge.speedtest.urlPresets.cachefly',
+    url: 'https://cachefly.cachefly.net/100mb.test',
+  },
+  {
+    id: 'tele2',
+    labelKey: 'settings.components.verge.speedtest.urlPresets.tele2',
+    url: 'https://speedtest.tele2.net/100MB.zip',
+  },
+] as const
+
 /** 测速时长允许范围(秒):下限保证有数据可算,上限限制整组测速的流量消耗。
  *  后端 src-tauri/src/feat/speedtest.rs 持有同一份界限做服务端校验,两处需同步修改。 */
 export const MIN_SPEEDTEST_DURATION_SECS = 1
@@ -170,6 +243,10 @@ export interface SpeedtestOptions {
   url: string
   durationSecs: number
   maxBytes: number | undefined
+  /** 是否并行;未配置默认开启。 */
+  parallel: boolean
+  /** 并发数(1–8);未配置默认 4。 */
+  concurrency: number
 }
 
 /** 从 verge 设置解析测速三要素;未配置项各自落到内置默认(单项/整组一致)。 */
@@ -177,8 +254,14 @@ export const resolveSpeedtestOptions = (verge?: {
   default_speedtest_url?: string | null
   default_speedtest_duration?: number | null
   default_speedtest_max_mb?: number | null
+  default_speedtest_parallel?: boolean | null
+  default_speedtest_concurrency?: number | null
 }): SpeedtestOptions => ({
   url: resolveSpeedtestUrl(verge?.default_speedtest_url),
   durationSecs: resolveSpeedtestDurationSecs(verge?.default_speedtest_duration),
   maxBytes: resolveSpeedtestMaxBytes(verge?.default_speedtest_max_mb),
+  parallel: resolveSpeedtestParallel(verge?.default_speedtest_parallel),
+  concurrency: resolveSpeedtestConcurrency(
+    verge?.default_speedtest_concurrency,
+  ),
 })
