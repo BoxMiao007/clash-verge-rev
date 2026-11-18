@@ -5,7 +5,7 @@ import {
   TextField,
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { TooltipIcon } from '@/components/base'
@@ -43,6 +43,9 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
 
   // URL 为自由文本:输入过程只改草稿,失焦才落盘(空串回落内置默认值)。
   const [urlDraft, setUrlDraft] = useState<string | null>(null)
+  // 用户显式选择“自定义”后保持自定义态,否则会被预设的 URL 匹配回某个预设。
+  const [customMode, setCustomMode] = useState(false)
+  const urlInputRef = useRef<HTMLInputElement>(null)
 
   const onChangeData = (patch: any) => {
     mutateVerge({ ...verge, ...patch })
@@ -50,6 +53,7 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
 
   const commitUrl = useLockFn(async (raw: string) => {
     setUrlDraft(null)
+    setCustomMode(false)
     const url = raw.trim()
     // 无变化不落盘,避免每次失焦都重写配置。
     if (url === (default_speedtest_url ?? '').trim()) return
@@ -69,15 +73,22 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
   }
 
   const onSelectPreset = useLockFn(async (id: string) => {
-    if (id === 'custom') return
+    if (id === 'custom') {
+      // 自定义态只切换选择、不改 URL,并把焦点交给输入框方便直接编辑。
+      setCustomMode(true)
+      setTimeout(() => urlInputRef.current?.focus(), 0)
+      return
+    }
+    setCustomMode(false)
     const preset = SPEEDTEST_URL_PRESETS.find((item) => item.id === id)
     if (preset) await commitUrl(preset.url)
   })
 
   const currentUrl = default_speedtest_url ?? ''
-  const currentPresetId =
-    SPEEDTEST_URL_PRESETS.find((preset) => preset.url === currentUrl.trim())
-      ?.id ?? 'custom'
+  const currentPresetId = customMode
+    ? 'custom'
+    : (SPEEDTEST_URL_PRESETS.find((preset) => preset.url === currentUrl.trim())
+        ?.id ?? 'custom')
 
   return (
     <SettingList title={t('settings.components.verge.speedtest.title')}>
@@ -94,7 +105,14 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
           />
         }
       >
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 1,
+            alignItems: 'center',
+            width: '100%',
+          }}
+        >
           <TextField
             select
             size="small"
@@ -114,15 +132,19 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
             </MenuItem>
           </TextField>
           <TextField
+            inputRef={urlInputRef}
             autoComplete="new-password"
             size="small"
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck="false"
-            sx={{ width: 250 }}
+            sx={{ flex: 1, minWidth: 240 }}
             value={urlDraft ?? default_speedtest_url ?? ''}
             placeholder={DEFAULT_SPEEDTEST_URL}
-            onChange={(e) => setUrlDraft(e.target.value)}
+            onChange={(e) => {
+              setUrlDraft(e.target.value)
+              setCustomMode(true)
+            }}
             onBlur={onCommitUrl}
           />
         </Box>
