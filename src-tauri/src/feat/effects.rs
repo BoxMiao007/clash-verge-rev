@@ -96,7 +96,6 @@ verge_registry! {
     default_speedtest_url => NoEffect;
     default_speedtest_duration => NoEffect;
     default_speedtest_max_mb => NoEffect;
-    default_speedtest_parallel => NoEffect;
     default_speedtest_concurrency => NoEffect;
     enable_auto_delay_detection => NoEffect;
     auto_delay_detection_interval_minutes => NoEffect;

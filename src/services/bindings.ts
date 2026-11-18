@@ -484,8 +484,7 @@ export type IVerge_Deserialize = {
    *  解析语义见前端 src/utils/speed.ts 与 feat/speedtest.rs(两处同步约定)。
    */
   default_speedtest_max_mb?: number | null
-  /**  并行测速开关与并发数(ADR-0005);未配置时前端默认开启、并发 4(1–8)。 */
-  default_speedtest_parallel?: boolean | null
+  /**  并行测速并发数(ADR-0005):1 = 逐个测速,默认 4(1–8)。 */
   default_speedtest_concurrency?: number | null
   enable_auto_delay_detection?: boolean | null
   /**  自动检测当前节点延迟的间隔（分钟） */
@@ -585,8 +584,7 @@ export type IVerge_Serialize = {
    *  解析语义见前端 src/utils/speed.ts 与 feat/speedtest.rs(两处同步约定)。
    */
   default_speedtest_max_mb: number | null
-  /**  并行测速开关与并发数(ADR-0005);未配置时前端默认开启、并发 4(1–8)。 */
-  default_speedtest_parallel: boolean | null
+  /**  并行测速并发数(ADR-0005):1 = 逐个测速,默认 4(1–8)。 */
   default_speedtest_concurrency: number | null
   enable_auto_delay_detection: boolean | null
   /**  自动检测当前节点延迟的间隔（分钟） */

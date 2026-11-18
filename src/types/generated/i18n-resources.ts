@@ -803,7 +803,6 @@ export interface TranslationResources {
               speedtestConcurrency: string
               speedtestDuration: string
               speedtestMaxMb: string
-              speedtestParallel: string
               speedtestUrl: string
             }
             title: string
@@ -811,7 +810,6 @@ export interface TranslationResources {
               speedtestConcurrency: string
               speedtestDuration: string
               speedtestMaxMb: string
-              speedtestParallel: string
               speedtestUrl: string
             }
             urlPresets: {

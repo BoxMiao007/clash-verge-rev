@@ -185,15 +185,13 @@
           "speedtestUrl": "Speed Test URL",
           "speedtestDuration": "Speed Test Duration",
           "speedtestMaxMb": "Speed Test Data Cap",
-          "speedtestParallel": "Parallel Speed Test",
           "speedtestConcurrency": "Concurrent Tests"
         },
         "tooltips": {
           "speedtestUrl": "URL of the test file downloaded during speed tests; leave empty to use the built-in default. Pick a preset for quick selection",
           "speedtestDuration": "Download window of each speed test, between 1 and 30 seconds",
           "speedtestMaxMb": "Maximum data downloaded per speed test, between 1 and 1024 MB; reaching the cap ends the test early, 0 for unlimited",
-          "speedtestParallel": "Test multiple nodes at once, much faster than one by one; concurrent tests share the egress bandwidth so readings run lower — best for relative ranking",
-          "speedtestConcurrency": "Number of nodes tested at once, 1-8, default 4"
+          "speedtestConcurrency": "Number of nodes tested at once, 1-8; set 1 to test one by one, default 4"
         },
         "urlPresets": {
           "cloudflare": "Cloudflare",

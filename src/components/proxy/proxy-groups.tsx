@@ -181,7 +181,7 @@ function useProxyRenderState(
           speedtest.url,
           speedtest.durationSecs,
           speedtest.maxBytes,
-          { parallel: speedtest.parallel, concurrency: speedtest.concurrency },
+          { concurrency: speedtest.concurrency },
         )
         debugLog(`[ProxyGroups] 速度测试完成，组: ${groupName}`)
       } catch (error) {

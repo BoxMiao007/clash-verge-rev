@@ -18,6 +18,8 @@ interface ItemProps {
   extra?: ReactNode
   children?: ReactNode
   secondary?: ReactNode
+  /** 纵向布局:标签在上、控件在下(用于窄控件/长标签)。 */
+  vertical?: boolean
   onClick?: () => void | Promise<any>
 }
 
@@ -27,6 +29,7 @@ export const SettingItem: React.FC<ItemProps> = ({
   extra,
   children,
   secondary,
+  vertical = false,
   onClick,
 }) => {
   const clickable = !!onClick
@@ -60,6 +63,20 @@ export const SettingItem: React.FC<ItemProps> = ({
           <ChevronRightRounded />
         )}
       </ListItemButton>
+    </ListItem>
+  ) : vertical ? (
+    <ListItem
+      data-setting-target={searchTarget}
+      sx={{
+        pt: '5px',
+        pb: '5px',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        gap: 1,
+      }}
+    >
+      <ListItemText primary={primary} secondary={secondary} />
+      {children}
     </ListItem>
   ) : (
     <ListItem data-setting-target={searchTarget} sx={{ pt: '5px', pb: '5px' }}>

@@ -96,8 +96,7 @@ export const DEFAULT_SPEEDTEST_URL =
   'https://dl.google.com/chrome/mac/universal/stable/GGRO/googlechrome.dmg'
 export const DEFAULT_SPEEDTEST_WINDOW_SECS = 5
 
-/** 并行测速:默认开启(ADR-0005);并发数默认 4,允许 1–8。 */
-export const DEFAULT_SPEEDTEST_PARALLEL = true
+/** 并行测速:并发数即唯一的并行开关,1 = 逐个测速;默认 4,允许 1–8(ADR-0005)。 */
 export const DEFAULT_SPEEDTEST_CONCURRENCY = 4
 export const MIN_SPEEDTEST_CONCURRENCY = 1
 export const MAX_SPEEDTEST_CONCURRENCY = 8
@@ -108,10 +107,6 @@ export const clampSpeedtestConcurrency = (value: number): number =>
     MAX_SPEEDTEST_CONCURRENCY,
     Math.max(MIN_SPEEDTEST_CONCURRENCY, Math.trunc(value)),
   )
-
-export const resolveSpeedtestParallel = (
-  configured?: boolean | null,
-): boolean => (typeof configured === 'boolean' ? configured : DEFAULT_SPEEDTEST_PARALLEL)
 
 export const resolveSpeedtestConcurrency = (
   configured?: number | null,
@@ -243,9 +238,7 @@ export interface SpeedtestOptions {
   url: string
   durationSecs: number
   maxBytes: number | undefined
-  /** 是否并行;未配置默认开启。 */
-  parallel: boolean
-  /** 并发数(1–8);未配置默认 4。 */
+  /** 并发数(1–8);1 表示逐个测速,未配置默认 4。 */
   concurrency: number
 }
 
@@ -254,13 +247,11 @@ export const resolveSpeedtestOptions = (verge?: {
   default_speedtest_url?: string | null
   default_speedtest_duration?: number | null
   default_speedtest_max_mb?: number | null
-  default_speedtest_parallel?: boolean | null
   default_speedtest_concurrency?: number | null
 }): SpeedtestOptions => ({
   url: resolveSpeedtestUrl(verge?.default_speedtest_url),
   durationSecs: resolveSpeedtestDurationSecs(verge?.default_speedtest_duration),
   maxBytes: resolveSpeedtestMaxBytes(verge?.default_speedtest_max_mb),
-  parallel: resolveSpeedtestParallel(verge?.default_speedtest_parallel),
   concurrency: resolveSpeedtestConcurrency(
     verge?.default_speedtest_concurrency,
   ),
