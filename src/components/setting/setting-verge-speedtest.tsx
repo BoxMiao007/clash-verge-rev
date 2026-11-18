@@ -2,7 +2,6 @@ import {
   Box,
   InputAdornment,
   MenuItem,
-  Switch,
   TextField,
 } from '@mui/material'
 import { useLockFn } from 'ahooks'
@@ -22,7 +21,6 @@ import {
   resolveSpeedtestConcurrency,
   resolveSpeedtestDurationSecs,
   resolveSpeedtestMaxMb,
-  resolveSpeedtestParallel,
 } from '@/utils/speed'
 
 import { GuardState } from './mods/guard-state'
@@ -40,7 +38,6 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
     default_speedtest_url,
     default_speedtest_duration,
     default_speedtest_max_mb,
-    default_speedtest_parallel,
     default_speedtest_concurrency,
   } = verge ?? {}
 
@@ -77,16 +74,6 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
     if (preset) await commitUrl(preset.url)
   })
 
-  const onToggleParallel = useLockFn(async (checked: boolean) => {
-    onChangeData({ default_speedtest_parallel: checked })
-    try {
-      await patchVerge({ default_speedtest_parallel: checked })
-    } catch (err) {
-      onChangeData({ default_speedtest_parallel: default_speedtest_parallel })
-      onError?.(err as Error)
-    }
-  })
-
   const currentUrl = default_speedtest_url ?? ''
   const currentPresetId =
     SPEEDTEST_URL_PRESETS.find((preset) => preset.url === currentUrl.trim())
@@ -95,6 +82,7 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
   return (
     <SettingList title={t('settings.components.verge.speedtest.title')}>
       <SettingItem
+        vertical
         data-setting-target="settings.components.verge.speedtest.fields.speedtestUrl"
         label={t('settings.components.verge.speedtest.fields.speedtestUrl')}
         extra={
@@ -234,26 +222,6 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
       </SettingItem>
 
       <SettingItem
-        data-setting-target="settings.components.verge.speedtest.fields.speedtestParallel"
-        label={t(
-          'settings.components.verge.speedtest.fields.speedtestParallel',
-        )}
-        extra={
-          <TooltipIcon
-            title={t(
-              'settings.components.verge.speedtest.tooltips.speedtestParallel',
-            )}
-            sx={{ opacity: '0.7' }}
-          />
-        }
-      >
-        <Switch
-          checked={resolveSpeedtestParallel(default_speedtest_parallel)}
-          onChange={(e) => void onToggleParallel(e.target.checked)}
-        />
-      </SettingItem>
-
-      <SettingItem
         data-setting-target="settings.components.verge.speedtest.fields.speedtestConcurrency"
         label={t(
           'settings.components.verge.speedtest.fields.speedtestConcurrency',
@@ -286,7 +254,6 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck="false"
-            disabled={!resolveSpeedtestParallel(default_speedtest_parallel)}
             sx={{ width: 250 }}
             placeholder={String(DEFAULT_SPEEDTEST_CONCURRENCY)}
           />

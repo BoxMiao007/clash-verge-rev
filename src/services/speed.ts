@@ -9,7 +9,6 @@ import {
   SPEED_TIMEOUT,
   DEFAULT_SPEEDTEST_URL,
   DEFAULT_SPEEDTEST_WINDOW_SECS,
-  DEFAULT_SPEEDTEST_CONCURRENCY,
 } from '@/utils/speed'
 
 import { speedtestNode, speedtestNodeViaSlot, speedtestSlotPorts } from './cmds'
@@ -520,7 +519,7 @@ class SpeedManager {
     }
   }
 
-  /** 整组测速:并行(默认)或串行,按设置并发数与可用槽数调度。
+  /** 整组测速:按并发数并行(1 = 逐个串行),受可用槽数限制。
    *
    *  每个叶子节点占一个测速槽、互不干扰;子组成员或槽不可用时回落 GLOBAL 通道,
    *  而 GLOBAL 切换是全局互斥的,因此只要存在非节点成员或没有任何可用槽,整批退化为串行,
@@ -531,7 +530,7 @@ class SpeedManager {
     url: string = DEFAULT_SPEEDTEST_URL,
     windowSecs: number = DEFAULT_SPEEDTEST_WINDOW_SECS,
     maxBytes?: number,
-    options?: { parallel?: boolean; concurrency?: number },
+    options?: { concurrency?: number },
   ) {
     debugLog(
       `[SpeedManager] 批量测试速度开始，组: ${group}, 数量: ${proxies.length}`,
@@ -547,10 +546,8 @@ class SpeedManager {
     await this.loadSlots()
     const hasNonNode = proxies.some((member) => member.kind !== 'node')
     const slotCount = this.slotAvailable()
-    const desired = options?.parallel
-      ? Math.max(1, options.concurrency ?? DEFAULT_SPEEDTEST_CONCURRENCY)
-      : 1
-    // GLOBAL 通道全局互斥:无槽或含子组成员时只能串行。
+    // 并发数即并行开关:1 表示逐个串行;GLOBAL 通道互斥时也只能串行。
+    const desired = Math.max(1, options?.concurrency ?? 1)
     const limit =
       slotCount === 0 || hasNonNode ? 1 : Math.min(desired, slotCount)
 

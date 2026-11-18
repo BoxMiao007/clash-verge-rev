@@ -5,7 +5,7 @@
 ## 目标
 
 1. 每个节点/订阅的速度测试结果持久化保存;只能由手动测速更新;刷新页面、刷新订阅及其他刷新操作不得改变或去除。
-2. 速度测试设置新增「默认并行测速」,不再逐个测速;并发数可调。
+2. 速度测试设置新增「并发测速数」:并发数即唯一的并行开关,1 = 逐个测速;不再单独提供并行开关。
 3. 增加更多内置速度测试链接。
 
 ## 关键决策
@@ -18,7 +18,7 @@
 - **展示**:速度值行内常驻;悬停显示测速时间。
 - **并行**:配置生成时固定注入 8 个隐藏测速槽(selector 组 + 本地监听端口),运行时按设置并发数(1–8)取用;mihomo 走 listener `proxy:` 绑定槽组,meow 走 `IN-PORT` 规则引流。
 - **单项测速**:同样走测速槽,不再切 GLOBAL;原 GLOBAL 专用通道保留为槽不可用/子组成员时的兜底。
-- **默认值**:并行开启、并发 4。
+- **默认值**:并发 4;并发数 1 即逐个测速。
 - **测速链接**:内置预设 Cloudflare / Google / OVH / Hetzner / Cachefly / Tele2 + 自定义输入,选中写入现有 `default_speedtest_url`。
 
 ## 验收标准
@@ -34,10 +34,10 @@
 
 ## 工单拆分
 
-1. 后端并行测速槽:注入 8 槽(listener + 隐藏 selector 组)、meow `IN-PORT` 引流、`speedtest_slot_ports` / `speedtest_node_via_slot` 命令、IVerge 新增 `default_speedtest_parallel` / `default_speedtest_concurrency`。
+1. 后端并行测速槽:注入 8 槽(listener + 隐藏 selector 组)、meow `IN-PORT` 引流、`speedtest_slot_ports` / `speedtest_node_via_slot` 命令、IVerge 新增 `default_speedtest_concurrency`。
 2. 前端持久化:SpeedManager 按订阅作用域载入/持久化、节点标识、跨分组共享、孤儿清理、不自动过期;`use-speed-profile-scope` 接入代理页。
 3. 前端并行调度:槽池、并发池、单项走槽、GLOBAL 兜底;设置项读取并行/并发。
-4. 设置页与文案:并行开关、并发数、测速链接预设下拉;i18n(zh/en)。
+4. 设置页与文案:并发数(唯一并行开关)、测速链接预设下拉;i18n(zh/en)。
 5. 文档:ADR-0005、GLOSSARY 术语、本 spec。
 
 ## 已知限制
