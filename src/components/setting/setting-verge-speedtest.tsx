@@ -1,4 +1,10 @@
-import { InputAdornment, TextField } from '@mui/material'
+import {
+  Box,
+  InputAdornment,
+  MenuItem,
+  Switch,
+  TextField,
+} from '@mui/material'
 import { useLockFn } from 'ahooks'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -6,12 +12,17 @@ import { useTranslation } from 'react-i18next'
 import { TooltipIcon } from '@/components/base'
 import { useVerge } from '@/hooks/use-verge'
 import {
+  DEFAULT_SPEEDTEST_CONCURRENCY,
   DEFAULT_SPEEDTEST_URL,
   DEFAULT_SPEEDTEST_WINDOW_SECS,
   MIN_SPEEDTEST_DURATION_SECS,
+  SPEEDTEST_URL_PRESETS,
+  clampSpeedtestConcurrency,
   clampSpeedtestDurationSecs,
+  resolveSpeedtestConcurrency,
   resolveSpeedtestDurationSecs,
   resolveSpeedtestMaxMb,
+  resolveSpeedtestParallel,
 } from '@/utils/speed'
 
 import { GuardState } from './mods/guard-state'
@@ -29,6 +40,8 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
     default_speedtest_url,
     default_speedtest_duration,
     default_speedtest_max_mb,
+    default_speedtest_parallel,
+    default_speedtest_concurrency,
   } = verge ?? {}
 
   // URL 为自由文本:输入过程只改草稿,失焦才落盘(空串回落内置默认值)。
@@ -38,10 +51,9 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
     mutateVerge({ ...verge, ...patch })
   }
 
-  const onCommitUrl = useLockFn(async () => {
-    if (urlDraft === null) return
-    const url = urlDraft.trim()
+  const commitUrl = useLockFn(async (raw: string) => {
     setUrlDraft(null)
+    const url = raw.trim()
     // 无变化不落盘,避免每次失焦都重写配置。
     if (url === (default_speedtest_url ?? '').trim()) return
     onChangeData({ default_speedtest_url: url })
@@ -53,6 +65,32 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
       onError?.(err as Error)
     }
   })
+
+  const onCommitUrl = () => {
+    if (urlDraft === null) return
+    void commitUrl(urlDraft)
+  }
+
+  const onSelectPreset = useLockFn(async (id: string) => {
+    if (id === 'custom') return
+    const preset = SPEEDTEST_URL_PRESETS.find((item) => item.id === id)
+    if (preset) await commitUrl(preset.url)
+  })
+
+  const onToggleParallel = useLockFn(async (checked: boolean) => {
+    onChangeData({ default_speedtest_parallel: checked })
+    try {
+      await patchVerge({ default_speedtest_parallel: checked })
+    } catch (err) {
+      onChangeData({ default_speedtest_parallel: default_speedtest_parallel })
+      onError?.(err as Error)
+    }
+  })
+
+  const currentUrl = default_speedtest_url ?? ''
+  const currentPresetId =
+    SPEEDTEST_URL_PRESETS.find((preset) => preset.url === currentUrl.trim())
+      ?.id ?? 'custom'
 
   return (
     <SettingList title={t('settings.components.verge.speedtest.title')}>
@@ -68,18 +106,38 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
           />
         }
       >
-        <TextField
-          autoComplete="new-password"
-          size="small"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck="false"
-          sx={{ width: 250 }}
-          value={urlDraft ?? default_speedtest_url ?? ''}
-          placeholder={DEFAULT_SPEEDTEST_URL}
-          onChange={(e) => setUrlDraft(e.target.value)}
-          onBlur={onCommitUrl}
-        />
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <TextField
+            select
+            size="small"
+            sx={{ width: 150 }}
+            value={currentPresetId}
+            onChange={(e) => void onSelectPreset(e.target.value)}
+          >
+            {SPEEDTEST_URL_PRESETS.map((preset) => (
+              <MenuItem key={preset.id} value={preset.id}>
+                {t(preset.labelKey)}
+              </MenuItem>
+            ))}
+            <MenuItem value="custom">
+              {t(
+                'settings.components.verge.speedtest.urlPresets.custom',
+              )}
+            </MenuItem>
+          </TextField>
+          <TextField
+            autoComplete="new-password"
+            size="small"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            sx={{ width: 250 }}
+            value={urlDraft ?? default_speedtest_url ?? ''}
+            placeholder={DEFAULT_SPEEDTEST_URL}
+            onChange={(e) => setUrlDraft(e.target.value)}
+            onBlur={onCommitUrl}
+          />
+        </Box>
       </SettingItem>
 
       <SettingItem
@@ -171,6 +229,66 @@ const SettingVergeSpeedtest = ({ onError }: Props) => {
                 ),
               },
             }}
+          />
+        </GuardState>
+      </SettingItem>
+
+      <SettingItem
+        data-setting-target="settings.components.verge.speedtest.fields.speedtestParallel"
+        label={t(
+          'settings.components.verge.speedtest.fields.speedtestParallel',
+        )}
+        extra={
+          <TooltipIcon
+            title={t(
+              'settings.components.verge.speedtest.tooltips.speedtestParallel',
+            )}
+            sx={{ opacity: '0.7' }}
+          />
+        }
+      >
+        <Switch
+          checked={resolveSpeedtestParallel(default_speedtest_parallel)}
+          onChange={(e) => void onToggleParallel(e.target.checked)}
+        />
+      </SettingItem>
+
+      <SettingItem
+        data-setting-target="settings.components.verge.speedtest.fields.speedtestConcurrency"
+        label={t(
+          'settings.components.verge.speedtest.fields.speedtestConcurrency',
+        )}
+        extra={
+          <TooltipIcon
+            title={t(
+              'settings.components.verge.speedtest.tooltips.speedtestConcurrency',
+            )}
+            sx={{ opacity: '0.7' }}
+          />
+        }
+      >
+        <GuardState
+          value={resolveSpeedtestConcurrency(default_speedtest_concurrency)}
+          onCatch={onError}
+          onFormat={(e: any) => {
+            const parsed = parseInt(e.target.value, 10)
+            return Number.isFinite(parsed)
+              ? clampSpeedtestConcurrency(parsed)
+              : DEFAULT_SPEEDTEST_CONCURRENCY
+          }}
+          onChange={(e) => onChangeData({ default_speedtest_concurrency: e })}
+          onGuard={(e) => patchVerge({ default_speedtest_concurrency: e })}
+        >
+          <TextField
+            autoComplete="new-password"
+            size="small"
+            type="number"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            disabled={!resolveSpeedtestParallel(default_speedtest_parallel)}
+            sx={{ width: 250 }}
+            placeholder={String(DEFAULT_SPEEDTEST_CONCURRENCY)}
           />
         </GuardState>
       </SettingItem>

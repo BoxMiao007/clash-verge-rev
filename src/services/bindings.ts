@@ -150,6 +150,24 @@ export const commands = {
       durationSecs,
       maxBytes,
     }),
+  /**  读取并行测速槽的端口表(下标即槽号,None 表示未注入);前端据此决定并行度。 */
+  speedtestSlotPorts: () =>
+    __TAURI_INVOKE<(number | null)[]>('speedtest_slot_ports'),
+  /**  经指定测速槽测单节点:后端把节点绑到槽组并从该槽端口下载,不触碰 GLOBAL。 */
+  speedtestNodeViaSlot: (
+    slot: number,
+    name: string,
+    url: string,
+    durationSecs: number,
+    maxBytes: number | null,
+  ) =>
+    __TAURI_INVOKE<SpeedTestResult>('speedtest_node_via_slot', {
+      slot,
+      name,
+      url,
+      durationSecs,
+      maxBytes,
+    }),
   getAppDir: () => __TAURI_INVOKE<string>('get_app_dir'),
   copyIconFile: (path: string, iconInfo: IconInfo) =>
     __TAURI_INVOKE<string>('copy_icon_file', { path, iconInfo }),
@@ -466,6 +484,9 @@ export type IVerge_Deserialize = {
    *  解析语义见前端 src/utils/speed.ts 与 feat/speedtest.rs(两处同步约定)。
    */
   default_speedtest_max_mb?: number | null
+  /**  并行测速开关与并发数(ADR-0005);未配置时前端默认开启、并发 4(1–8)。 */
+  default_speedtest_parallel?: boolean | null
+  default_speedtest_concurrency?: number | null
   enable_auto_delay_detection?: boolean | null
   /**  自动检测当前节点延迟的间隔（分钟） */
   auto_delay_detection_interval_minutes?: number | null
@@ -564,6 +585,9 @@ export type IVerge_Serialize = {
    *  解析语义见前端 src/utils/speed.ts 与 feat/speedtest.rs(两处同步约定)。
    */
   default_speedtest_max_mb: number | null
+  /**  并行测速开关与并发数(ADR-0005);未配置时前端默认开启、并发 4(1–8)。 */
+  default_speedtest_parallel: boolean | null
+  default_speedtest_concurrency: number | null
   enable_auto_delay_detection: boolean | null
   /**  自动检测当前节点延迟的间隔（分钟） */
   auto_delay_detection_interval_minutes: number | null

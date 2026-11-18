@@ -610,6 +610,7 @@ export interface TranslationResources {
           sortName: string
           sortSpeed: string
           speedCheck: string
+          speedMeasuredAt: string
         }
       }
     }
@@ -799,15 +800,28 @@ export interface TranslationResources {
           }
           speedtest: {
             fields: {
+              speedtestConcurrency: string
               speedtestDuration: string
               speedtestMaxMb: string
+              speedtestParallel: string
               speedtestUrl: string
             }
             title: string
             tooltips: {
+              speedtestConcurrency: string
               speedtestDuration: string
               speedtestMaxMb: string
+              speedtestParallel: string
               speedtestUrl: string
+            }
+            urlPresets: {
+              cachefly: string
+              cloudflare: string
+              custom: string
+              google: string
+              hetzner: string
+              ovh: string
+              tele2: string
             }
           }
           theme: {

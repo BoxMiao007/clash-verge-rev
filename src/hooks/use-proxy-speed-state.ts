@@ -52,18 +52,21 @@ export function useProxySpeedState(
       setSpeedState(INITIAL_SPEED)
       return
     }
-    const cachedUpdate = speedManager.getSpeedUpdate(name, groupName)
+    const cachedUpdate = speedManager.getSpeedUpdateForMember(member, groupName)
     if (cachedUpdate) {
       setSpeedState({ ...cachedUpdate })
       return
     }
 
     setSpeedState(INITIAL_SPEED)
-  }, [groupName, name, unresolved])
+  }, [groupName, member, unresolved])
 
   useEffect(() => {
     updateSpeed()
   }, [updateSpeed])
+
+  // 持久化层(订阅切换/刷新/别处测出)变化时刷新本行,保证跨分组共享与刷新后仍可见。
+  useEffect(() => speedManager.addStoreListener(updateSpeed), [updateSpeed])
 
   const onSpeed = useLockFn(async () => {
     if (!isInteractableMember(member)) return

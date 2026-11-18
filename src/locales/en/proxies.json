@@ -32,6 +32,7 @@
       "locate": "locate",
       "delayCheck": "Delay check",
       "speedCheck": "Speed test",
+      "speedMeasuredAt": "Tested at {{time}}",
       "sortDefault": "Sort by default",
       "sortDelay": "Sort by delay",
       "sortName": "Sort by name",

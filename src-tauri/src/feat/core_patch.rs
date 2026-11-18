@@ -75,6 +75,8 @@ fn patch_for_meow(config: &mut Mapping) {
     // meow 无 listener `proxy:` 绑定(spike 项 e):测速专用端口的引流改由栈顶
     // IN-PORT 规则承担(ADR-0004);实现收在 feat::speedtest,此处只留最小调用点。
     crate::feat::inject_speedtest_inport_rule(config);
+    // 并行测速槽同样靠 IN-PORT 规则引流(槽组名与端口在配置生成时同批注入)。
+    crate::feat::inject_speedtest_slot_inport_rules(config);
     force_fake_ip_dns_for_tun(config);
 }
 
@@ -469,6 +471,36 @@ mod tests {
             Some(format!("IN-PORT,{port},GLOBAL").as_str()),
             "引流规则必须引用 listener 的实际端口"
         );
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn meow_injects_slot_rules_and_strips_slot_listener_proxy() {
+        let mut config = representative_runtime_config();
+        let mut proxy = Mapping::new();
+        proxy.insert("name".into(), "n1".into());
+        config.insert("proxies".into(), Value::Sequence(vec![Value::Mapping(proxy)]));
+        crate::feat::inject_speedtest_slots(&mut config);
+        patch_config_for_core(&mut config, "verge-meow");
+
+        let rules = config.get("rules").and_then(Value::as_sequence).unwrap();
+        let slot_rules = rules
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|rule| rule.starts_with("IN-PORT,"))
+            .count();
+        assert_eq!(
+            slot_rules,
+            1 + crate::feat::SPEEDTEST_SLOT_COUNT as usize,
+            "GLOBAL 专用端口与每个槽各一条引流规则"
+        );
+        for listener in config.get("listeners").and_then(Value::as_sequence).unwrap() {
+            assert!(
+                !listener.as_mapping().unwrap().contains_key("proxy"),
+                "meow 下 listener 的 proxy: 字段必须剔除"
+            );
+        }
+        assert_eq!(crate::feat::speedtest_listener_port(&config), Some(9666));
     }
 
     /// 无测速 listener(端口探测失败等)时不注入引流规则:无通道即无规则,

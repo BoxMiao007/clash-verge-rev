@@ -32,7 +32,7 @@ import {
   type ResolvedProxyMember,
 } from '@/types/proxy-view'
 import { debugLog } from '@/utils/debug'
-import { resolveSpeedtestOptions } from '@/utils/speed'
+import { isSpeedtestSlotGroupName, resolveSpeedtestOptions } from '@/utils/speed'
 
 import type { ProxyChainItem } from './proxy-chain-model'
 import { ProxyEmptyState } from './proxy-empty-state'
@@ -129,6 +129,13 @@ function useProxyRenderState(
       if (!group) return []
       return group.members
         .map((member) => resolveMember(proxyView, member))
+        .filter(
+          (member) =>
+            !(
+              member.kind === 'group' &&
+              isSpeedtestSlotGroupName(member.ref.name)
+            ),
+        )
         .filter(isInteractableMember)
     },
     [proxyView],
@@ -174,6 +181,7 @@ function useProxyRenderState(
           speedtest.url,
           speedtest.durationSecs,
           speedtest.maxBytes,
+          { parallel: speedtest.parallel, concurrency: speedtest.concurrency },
         )
         debugLog(`[ProxyGroups] 速度测试完成，组: ${groupName}`)
       } catch (error) {
@@ -241,7 +249,9 @@ function ChainProxyGroups(props: {
     const groups = proxyView?.groups
     if (!groups) return []
     return groups.filter(
-      (group) => group.type === 'Selector' || group.type === 'URLTest',
+      (group) =>
+        (group.type === 'Selector' || group.type === 'URLTest') &&
+        !isSpeedtestSlotGroupName(group.name),
     )
   }, [proxyView?.groups])
 

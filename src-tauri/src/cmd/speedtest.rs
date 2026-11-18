@@ -19,3 +19,27 @@ pub async fn speedtest_node(
         .await
         .with_error_code("SPEEDTEST_FAILED")
 }
+
+/// 读取并行测速槽的端口表(下标即槽号,None 表示未注入);前端据此决定并行度。
+#[tauri::command]
+#[specta::specta]
+pub async fn speedtest_slot_ports() -> CmdResult<Vec<Option<u16>>> {
+    feat::speedtest_slot_ports_runtime()
+        .await
+        .with_error_code("SPEEDTEST_FAILED")
+}
+
+/// 经指定测速槽测单节点:后端把节点绑到槽组并从该槽端口下载,不触碰 GLOBAL。
+#[tauri::command]
+#[specta::specta]
+pub async fn speedtest_node_via_slot(
+    slot: u16,
+    name: String,
+    url: String,
+    duration_secs: u64,
+    max_bytes: Option<f64>,
+) -> CmdResult<feat::SpeedTestResult> {
+    feat::speedtest_node_via_slot(slot, name, url, duration_secs, max_bytes)
+        .await
+        .with_error_code("SPEEDTEST_FAILED")
+}

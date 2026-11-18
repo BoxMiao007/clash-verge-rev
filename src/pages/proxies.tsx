@@ -11,6 +11,7 @@ import {
   type ProxyChainItem,
 } from '@/components/proxy/proxy-chain-model'
 import { ProxyGroups } from '@/components/proxy/proxy-groups'
+import { useSpeedProfileScope } from '@/hooks/use-speed-profile-scope'
 import {
   useAppRefreshers,
   useClashConfigData,
@@ -32,6 +33,9 @@ const isMode = (value: unknown): value is Mode =>
 
 const ProxyPage = () => {
   const { t } = useTranslation()
+
+  // 让测速结果按当前订阅作用域载入/清理。
+  useSpeedProfileScope()
 
   // 从 localStorage 恢复链式代理按钮状态
   const [isChainMode, setIsChainMode] = useState(() => {
